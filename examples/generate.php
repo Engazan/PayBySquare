@@ -22,6 +22,7 @@ $vs        = trim($_GET['vs'] ?? '');
 $cs        = trim($_GET['cs'] ?? '');
 $ss        = trim($_GET['ss'] ?? '');
 $note      = trim($_GET['note'] ?? '');
+$reference = trim($_GET['reference'] ?? '');
 $currency  = trim($_GET['currency'] ?? 'EUR');
 $dueDate   = trim($_GET['dueDate'] ?? '');
 $size      = max(100, min(1000, (int) ($_GET['size'] ?? 300)));
@@ -44,6 +45,7 @@ try {
         ->setVariableSymbol($vs)
         ->setConstantSymbol($cs)
         ->setSpecificSymbol($ss)
+        ->setPaymentReference($reference)
         ->setNote($note);
 
     if ($dueDate !== '') {

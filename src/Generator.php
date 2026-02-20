@@ -36,6 +36,7 @@ class Generator
     private string $variableSymbol = '';
     private string $specificSymbol = '';
     private string $constantSymbol = '';
+    private string $paymentReference = '';
     private string $note = '';
     private ?\DateTimeInterface $dueDate = null;
     private string $xzPath = '';
@@ -88,6 +89,12 @@ class Generator
     public function setConstantSymbol(string $cs): static
     {
         $this->constantSymbol = $cs;
+        return $this;
+    }
+
+    public function setPaymentReference(string $reference): static
+    {
+        $this->paymentReference = trim($reference);
         return $this;
     }
 
@@ -168,6 +175,11 @@ class Generator
         return $this->constantSymbol;
     }
 
+    public function getPaymentReference(): string
+    {
+        return $this->paymentReference;
+    }
+
     public function getNote(): string
     {
         return $this->note;
@@ -196,7 +208,7 @@ class Generator
             $this->variableSymbol,
             $this->constantSymbol,
             $this->specificSymbol,
-            '',                         // referencia platiteľa
+            $this->paymentReference,    // referencia platiteľa
             $this->note,
             '1',                        // počet IBAN-ov
             $this->iban,
@@ -375,6 +387,10 @@ class Generator
 
         if ($this->amount <= 0) {
             $errors[] = 'Suma musí byť väčšia ako 0 (setAmount())';
+        }
+
+        if (strlen($this->paymentReference) > 35) {
+            $errors[] = 'Referencia platiteľa môže mať maximálne 35 znakov';
         }
 
         if (strlen($this->note) > 35) {

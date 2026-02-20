@@ -404,6 +404,11 @@
     </div>
 
     <div class="field">
+        <label>Referencia platiteľa <span style="color:var(--muted);font-weight:400">(max 35 znakov)</span></label>
+        <input type="text" id="reference" placeholder="Referencia..." maxlength="35">
+    </div>
+
+    <div class="field">
         <label>Poznámka <span style="color:var(--muted);font-weight:400">(max 35 znakov)</span></label>
         <input type="text" id="note" placeholder="Platba faktúry..." maxlength="35">
     </div>
@@ -507,6 +512,7 @@
             vs:        document.getElementById('vs').value.trim(),
             cs:        document.getElementById('cs').value.trim(),
             ss:        document.getElementById('ss').value.trim(),
+            reference: document.getElementById('reference').value.trim(),
             note:      document.getElementById('note').value.trim(),
             dueDate:   document.getElementById('dueDate').value.trim(),
             size:      document.getElementById('size').value.trim() || '300',
@@ -562,6 +568,7 @@
         const vs = v('vs');
         const cs = v('cs');
         const ss = v('ss');
+        const reference = v('reference');
         const note = v('note');
         const dueDate = v('dueDate');
         const size = v('size') || '300';
@@ -579,6 +586,7 @@
         if (vs) lines.push(`    -><span class="fn">setVariableSymbol</span>(<span class="str">'${vs}'</span>)`);
         if (cs) lines.push(`    -><span class="fn">setConstantSymbol</span>(<span class="str">'${cs}'</span>)`);
         if (ss) lines.push(`    -><span class="fn">setSpecificSymbol</span>(<span class="str">'${ss}'</span>)`);
+        if (reference) lines.push(`    -><span class="fn">setPaymentReference</span>(<span class="str">'${reference}'</span>)`);
         if (note) lines.push(`    -><span class="fn">setNote</span>(<span class="str">'${note}'</span>)`);
         if (dueDate) lines.push(`    -><span class="fn">setDueDate</span>(<span class="kw">new</span> \\<span class="fn">DateTime</span>(<span class="str">'${dueDate}'</span>))`);
         lines.push(`    -><span class="fn">setStyle</span>(<span class="fn">QrStyle</span>::<span class="var">PayBySquare</span>);`);
@@ -618,9 +626,13 @@
         localStorage.setItem('theme', isLight ? 'light' : 'dark');
     }
 
-    // Načítaj uloženú tému
+    // Načítaj uloženú tému (default: light)
     (function() {
-        if (localStorage.getItem('theme') === 'light') {
+        const saved = localStorage.getItem('theme');
+        if (saved === 'dark') {
+            document.documentElement.classList.remove('light');
+            document.getElementById('themeIcon').textContent = '☀';
+        } else {
             document.documentElement.classList.add('light');
             document.getElementById('themeIcon').textContent = '☾';
         }

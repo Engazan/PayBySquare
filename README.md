@@ -30,6 +30,7 @@ $qr = (new Generator())
     ->setVariableSymbol('20240001')          // max 10 číslic
     ->setConstantSymbol('0308')              // max 4 znaky
     ->setSpecificSymbol('9999')
+    ->setPaymentReference('/VS1234/SS5678')   // max 35 znakov
     ->setNote('Faktura č. 2024/001')         // max 35 znakov
     ->setDueDate(new DateTime('+14 days'))
     ->setStyle(QrStyle::PayBySquare);
@@ -110,6 +111,7 @@ try {
 | `setVariableSymbol(string)` | VS | max 10 číslic |
 | `setSpecificSymbol(string)` | ŠS | max 10 číslic |
 | `setConstantSymbol(string)` | KS | max 4 znaky |
+| `setPaymentReference(string)` | Referencia platiteľa | max 35 znakov |
 | `setNote(string)` | Poznámka | max 35 znakov |
 | `setDueDate(DateTimeInterface)` | Dátum splatnosti | default: dnes |
 | `setStyle(QrStyle)` | Vizuálny štýl QR kódu | default: `QrStyle::Default` |
