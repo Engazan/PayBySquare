@@ -1,0 +1,29 @@
+{
+  "name": "engazan/pay-by-square",
+  "description": "OOP PHP knižnica pre generovanie slovenských PAY by square QR kódov",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Patrik Horvath"
+    }
+  ],
+  "require": {
+    "php": ">=8.0",
+    "bacon/bacon-qr-code": "^3.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "PayBySquare\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "PayBySquare\\Tests\\": "tests/"
+    }
+  },
+  "minimum-stability": "stable"
+}

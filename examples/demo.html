@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAY by square – Generátor QR kódov</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #0d0f14;
+            --surface:   #13161e;
+            --border:    #1f2433;
+            --blue:      #5b8ef0;
+            --blue-dim:  #2a3f70;
+            --text:      #e8eaf0;
+            --muted:     #5a6080;
+            --radius:    12px;
+            --mono:      'DM Mono', monospace;
+            --sans:      'Syne', sans-serif;
+        }
+
+        html.light {
+            --bg:        #f4f6fb;
+            --surface:   #ffffff;
+            --border:    #dde2ee;
+            --blue:      #3a6ed4;
+            --blue-dim:  #c5d6f7;
+            --text:      #1a1d2e;
+            --muted:     #7a84a0;
+        }
+
+        html, body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--sans); transition: background 0.25s, color 0.25s; }
+        *, *::before, *::after { transition: background-color 0.25s, border-color 0.25s, color 0.25s; }
+
+        body {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            grid-template-rows: auto 1fr;
+            min-height: 100vh;
+        }
+
+        header {
+            grid-column: 1 / -1;
+            padding: 28px 40px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }
+        header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+        header h1 span { color: var(--blue); }
+        header p { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+        .theme-toggle {
+            margin-left: auto;
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--muted);
+            font-size: 16px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            flex-shrink: 0;
+        }
+        .theme-toggle:hover { color: var(--blue); border-color: var(--blue); background: var(--blue-dim); }
+
+        /* ── Form ── */
+        .panel-form {
+            padding: 32px 40px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            overflow-y: auto;
+        }
+
+        .section-label {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+
+        .field { margin-bottom: 14px; }
+
+        label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 5px;
+        }
+
+        input, select {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 13px;
+            padding: 10px 12px;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            appearance: none;
+        }
+        input:focus, select:focus {
+            border-color: var(--blue-dim);
+            box-shadow: 0 0 0 3px rgba(91,142,240,0.12);
+        }
+        input::placeholder { color: var(--muted); }
+
+        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .field-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+        hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+        button {
+            margin-top: 6px;
+            width: 100%;
+            padding: 13px;
+            background: var(--blue);
+            color: #fff;
+            font-family: var(--sans);
+            font-size: 13px;
+            font-weight: 700;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: opacity 0.15s;
+            position: relative;
+            overflow: hidden;
+        }
+        button:hover { opacity: 0.88; }
+        button.loading { opacity: 0.55; pointer-events: none; }
+        button .btn-text { transition: opacity 0.2s; }
+        button.loading .btn-text { opacity: 0; }
+        .spinner {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        button.loading .spinner { opacity: 1; }
+        .spinner::after {
+            content: '';
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-msg {
+            display: none;
+            background: rgba(255,80,80,0.08);
+            border: 1px solid rgba(255,80,80,0.25);
+            color: #ff7070;
+            font-family: var(--mono);
+            font-size: 11px;
+            padding: 10px 12px;
+            border-radius: var(--radius);
+            margin-top: 10px;
+            max-height: 110px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.6;
+        }
+        .error-msg.visible { display: block; }
+
+        /* ── Preview ── */
+        .panel-preview {
+            padding: 32px 40px;
+            overflow-y: auto;
+        }
+
+        .preview-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 10px;
+            color: var(--muted);
+        }
+        .preview-empty svg { opacity: 0.15; }
+        .preview-empty p { font-family: var(--mono); font-size: 11px; }
+
+        .preview-grid { display: none; gap: 32px; grid-template-columns: 1fr 1fr; }
+        .preview-grid.visible { display: grid; }
+
+        .qr-block { display: flex; flex-direction: column; gap: 10px; }
+
+        .qr-block-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+        .qr-block-label { font-size: 12px; font-weight: 600; }
+
+        .style-badge {
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--border);
+            color: var(--muted);
+        }
+        .style-badge.blue  { background: var(--blue-dim); color: var(--blue); }
+        .style-badge.green { background: #1a3a2a; color: #3ecf8e; }
+        .style-badge.gray  { background: #252830; color: #8899bb; }
+
+        .qr-image-wrap { display: inline-flex; }
+        .qr-image-wrap img { max-width: 200px; height: auto; display: block; border-radius: 6px; }
+
+        .qr-image-wrap.transparent-wrap {
+            background: repeating-conic-gradient(#1a1d28 0% 25%, #222636 0% 50%) 0 0 / 14px 14px;
+            border-radius: 6px;
+            padding: 6px;
+        }
+        html.light .qr-image-wrap.transparent-wrap {
+            background: repeating-conic-gradient(#c8cedd 0% 25%, #e2e7f0 0% 50%) 0 0 / 14px 14px;
+        }
+
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--blue);
+            text-decoration: none;
+            padding: 4px 8px;
+            border: 1px solid var(--blue-dim);
+            border-radius: 5px;
+            transition: background 0.15s;
+            align-self: flex-start;
+        }
+        .download-link:hover { background: var(--blue-dim); }
+
+        @media (max-width: 900px) {
+            body { grid-template-columns: 1fr; }
+            .panel-form { border-right: none; border-bottom: 1px solid var(--border); }
+            .preview-grid { grid-template-columns: 1fr 1fr; }
+            header, .panel-form, .panel-preview { padding: 22px 20px; }
+        }
+        @media (max-width: 560px) {
+            .preview-grid { grid-template-columns: 1fr; }
+            .field-row, .field-row-3 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1><span>PAY</span> by square</h1>
+    <p>// QR generátor platobných príkazov</p>
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Prepnúť tému">
+        <span id="themeIcon">☀</span>
+    </button>
+</header>
+
+<section class="panel-form">
+    <p class="section-label">Platobné údaje</p>
+
+    <div class="field">
+        <label>IBAN</label>
+        <input type="text" id="iban" value="SK1811000000002935116681" placeholder="SK0000000000000000000000">
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label>SWIFT / BIC</label>
+            <input type="text" id="swift" value="TATRASBX" placeholder="TATRASBX">
+        </div>
+        <div class="field">
+            <label>Mena</label>
+            <select id="currency">
+                <option value="EUR" selected>EUR – Euro</option>
+                <option value="CZK">CZK – Koruna</option>
+                <option value="USD">USD – Dollar</option>
+                <option value="GBP">GBP – Pound</option>
+                <option value="CHF">CHF – Franc</option>
+                <option value="PLN">PLN – Zloty</option>
+                <option value="HUF">HUF – Forint</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label>Príjemca</label>
+            <input type="text" id="recipient" placeholder="Meno príjemcu">
+        </div>
+        <div class="field">
+            <label>Suma</label>
+            <input type="number" id="amount" step="0.01" min="0.01" placeholder="0.00">
+        </div>
+    </div>
+
+    <hr>
+
+    <div class="field-row-3">
+        <div class="field">
+            <label>Variabilný symbol</label>
+            <input type="text" id="vs" placeholder="0000000000" maxlength="10">
+        </div>
+        <div class="field">
+            <label>Konštantný symbol</label>
+            <input type="text" id="cs" placeholder="0308" maxlength="4">
+        </div>
+        <div class="field">
+            <label>Špecifický symbol</label>
+            <input type="text" id="ss" placeholder="0000000000" maxlength="10">
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Poznámka <span style="color:var(--muted);font-weight:400">(max 35 znakov)</span></label>
+        <input type="text" id="note" placeholder="Platba faktúry..." maxlength="35">
+    </div>
+
+    <button id="generateBtn" onclick="generate()">
+        <span class="btn-text">Generovať QR kód</span>
+        <span class="spinner"></span>
+    </button>
+
+    <div class="error-msg" id="errorMsg"></div>
+</section>
+
+<section class="panel-preview">
+    <div class="preview-empty" id="emptyState">
+        <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
+            <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+            <rect x="28" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+            <rect x="4" y="28" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+            <rect x="8" y="8" width="8" height="8" fill="currentColor" rx="1"/>
+            <rect x="32" y="8" width="8" height="8" fill="currentColor" rx="1"/>
+            <rect x="8" y="32" width="8" height="8" fill="currentColor" rx="1"/>
+            <rect x="28" y="28" width="4" height="4" fill="currentColor"/>
+            <rect x="36" y="28" width="4" height="4" fill="currentColor"/>
+            <rect x="28" y="36" width="4" height="4" fill="currentColor"/>
+            <rect x="36" y="36" width="4" height="4" fill="currentColor"/>
+            <rect x="32" y="32" width="4" height="4" fill="currentColor"/>
+        </svg>
+        <p>Vyplňte formulár a kliknite na Generovať</p>
+    </div>
+
+    <div class="preview-grid" id="previewGrid">
+
+        <div class="qr-block">
+            <div class="qr-block-header">
+                <span class="qr-block-label">PAY by square</span>
+                <span class="style-badge blue">pay_by_square</span>
+            </div>
+            <div class="qr-image-wrap">
+                <img id="qrPayBySquare" src="" alt="PAY by square">
+            </div>
+            <a class="download-link" id="dlPayBySquare" href="#" download="qr-pay-by-square.png">↓ PNG</a>
+        </div>
+
+        <div class="qr-block">
+            <div class="qr-block-header">
+                <span class="qr-block-label">PAY by square</span>
+                <span class="style-badge green">transparent</span>
+            </div>
+            <div class="qr-image-wrap transparent-wrap">
+                <img id="qrPayBySquareTransparent" src="" alt="PAY by square transparent">
+            </div>
+            <a class="download-link" id="dlPayBySquareTransparent" href="#" download="qr-pay-by-square-transparent.png">↓ PNG</a>
+        </div>
+
+        <div class="qr-block">
+            <div class="qr-block-header">
+                <span class="qr-block-label">Default</span>
+                <span class="style-badge">default</span>
+            </div>
+            <div class="qr-image-wrap">
+                <img id="qrDefault" src="" alt="Default QR">
+            </div>
+            <a class="download-link" id="dlDefault" href="#" download="qr-default.png">↓ PNG</a>
+        </div>
+
+        <div class="qr-block">
+            <div class="qr-block-header">
+                <span class="qr-block-label">Transparentné</span>
+                <span class="style-badge green">transparent</span>
+            </div>
+            <div class="qr-image-wrap transparent-wrap">
+                <img id="qrTransparent" src="" alt="Transparentný QR">
+            </div>
+            <a class="download-link" id="dlTransparent" href="#" download="qr-transparent.png">↓ PNG</a>
+        </div>
+
+    </div>
+</section>
+
+<script>
+    async function generate() {
+        const btn      = document.getElementById('generateBtn');
+        const errorMsg = document.getElementById('errorMsg');
+
+        errorMsg.className = 'error-msg';
+        btn.classList.add('loading');
+
+        const params = new URLSearchParams({
+            iban:      document.getElementById('iban').value.trim().replace(/\s/g, ''),
+            swift:     document.getElementById('swift').value.trim(),
+            currency:  document.getElementById('currency').value,
+            amount:    document.getElementById('amount').value.trim(),
+            recipient: document.getElementById('recipient').value.trim(),
+            vs:        document.getElementById('vs').value.trim(),
+            cs:        document.getElementById('cs').value.trim(),
+            ss:        document.getElementById('ss').value.trim(),
+            note:      document.getElementById('note').value.trim(),
+        });
+
+        const styles = ['pay_by_square', 'pay_by_square_transparent', 'default', 'transparent'];
+        const ids    = ['qrPayBySquare', 'qrPayBySquareTransparent', 'qrDefault', 'qrTransparent'];
+        const dlIds  = ['dlPayBySquare', 'dlPayBySquareTransparent', 'dlDefault', 'dlTransparent'];
+
+        try {
+            const responses = await Promise.all(
+                styles.map(s => fetch('generate.php?' + params + '&style=' + s))
+            );
+
+            const parseResponse = async (res) => {
+                const text = await res.text();
+                if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+                try { return JSON.parse(text); }
+                catch { throw new Error(text || 'Neplatná odpoveď zo servera'); }
+            };
+
+            const jsons = await Promise.all(responses.map(parseResponse));
+
+            jsons.forEach((json, i) => {
+                document.getElementById(ids[i]).src   = json.dataUri;
+                document.getElementById(dlIds[i]).href = json.dataUri;
+            });
+
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('previewGrid').classList.add('visible');
+
+        } catch (err) {
+            errorMsg.textContent = err.message;
+            errorMsg.classList.add('visible');
+        } finally {
+            btn.classList.remove('loading');
+        }
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') generate(); });
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const isLight = html.classList.toggle('light');
+        document.getElementById('themeIcon').textContent = isLight ? '☾' : '☀';
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    }
+
+    // Načítaj uloženú tému
+    (function() {
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.add('light');
+            document.getElementById('themeIcon').textContent = '☾';
+        }
+    })();
+</script>
+
+</body>
+</html>
