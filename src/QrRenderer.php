@@ -78,7 +78,7 @@ class QrRenderer
         $qrSize  = $this->size;
         $padding = (int)round($qrSize * 0.07);
         $borderW = max(2, (int)round($qrSize * 0.012));
-        $footerH = (int)round($qrSize * 0.22);
+        $footerH = (int)round($qrSize * 0.14);
         $cornerR = (int)round($qrSize * 0.06);
         $innerR  = max(1, $cornerR - $borderW);
         $footerY = $borderW + $padding + $qrSize + $padding;
@@ -163,26 +163,31 @@ class QrRenderer
         $cCard  = imagecolorallocate($img, $br, $bg, $bb);
         $cWhite = imagecolorallocate($img, 255, 255, 255);
 
-        $font  = min(5, max(2, $scale + 1));
-        $charW = imagefontwidth($font);
-        $charH = imagefontheight($font);
+        $fontSize = max(6, (int)round($this->size * 0.055));
+        $fontPath = __DIR__ . '/../resources/fonts/Inter.ttf';
 
-        $payW = strlen('PAY') * $charW;
-        $byW  = strlen(' by square') * $charW;
-        $iconW   = (int)round($charH * 1.8);
-        $iconH   = (int)round($charH * 1.2);
-        $iconGap = $charW;
+        // Zmeráme rozmery textov
+        $payBox = imagettfbbox($fontSize, 0, $fontPath, 'PAY');
+        $payW   = $payBox[2] - $payBox[0];
+        $byBox  = imagettfbbox($fontSize, 0, $fontPath, ' by square');
+        $byW    = $byBox[2] - $byBox[0];
+        $textH  = $payBox[1] - $payBox[5];
+
+        $iconH   = (int)round($textH * 0.9);
+        $iconW   = (int)round($iconH * 1.5);
+        $iconGap = (int)round($fontSize * 0.5);
 
         $totalW = $payW + $byW + $iconGap + $iconW;
         $startX = $cx - (int)($totalW / 2);
-        $textY  = $cy - (int)($charH / 2);
+        $textY  = $cy + (int)($textH / 2) - ($payBox[1]) - 15; // baseline
 
-        imagestring($img, $font, $startX,         $textY, 'PAY',        $cBlue);
-        imagestring($img, $font, $startX + $payW, $textY, ' by square', $cGray);
+        imagettftext($img, $fontSize, 0, $startX, $textY, $cBlue, $fontPath, 'PAY');
+        imagettftext($img, $fontSize, 0, $startX + $payW, $textY, $cGray, $fontPath, ' by square');
 
+        // Ikona karty
         $iconX = $startX + $payW + $byW + $iconGap;
-        $iconY = $cy - (int)($iconH / 2);
-        $this->filledRoundedRect($img, $cCard, $iconX, $iconY, $iconX + $iconW, $iconY + $iconH, 3);
+        $iconY = $cy - (int)($iconH / 2) - 15;
+        $this->filledRoundedRect($img, $cCard, $iconX, $iconY, $iconX + $iconW, $iconY + $iconH, max(2, (int)round($iconH * 0.2)));
         $stripeY = $iconY + (int)($iconH * 0.35);
         imagefilledrectangle($img, $iconX, $stripeY, $iconX + $iconW, $stripeY + max(1, (int)($iconH * 0.2)), $cWhite);
     }
