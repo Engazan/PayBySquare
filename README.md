@@ -2,6 +2,8 @@
 
 OOP PHP knižnica pre generovanie slovenských **PAY by square** QR kódov.
 
+**[Live Demo](https://pbs.engazan.eu)**
+
 ## Požiadavky
 
 - PHP 8.0+
