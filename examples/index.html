@@ -512,28 +512,26 @@
             size:      document.getElementById('size').value.trim() || '300',
         });
 
-        const styles = ['pay_by_square', 'pay_by_square_transparent', 'default', 'transparent'];
-        const ids    = ['qrPayBySquare', 'qrPayBySquareTransparent', 'qrDefault', 'qrTransparent'];
-        const dlIds  = ['dlPayBySquare', 'dlPayBySquareTransparent', 'dlDefault', 'dlTransparent'];
+        const styleMap = {
+            'pay_by_square':             { img: 'qrPayBySquare',            dl: 'dlPayBySquare' },
+            'pay_by_square_transparent': { img: 'qrPayBySquareTransparent', dl: 'dlPayBySquareTransparent' },
+            'default':                   { img: 'qrDefault',                dl: 'dlDefault' },
+            'transparent':               { img: 'qrTransparent',            dl: 'dlTransparent' },
+        };
 
         try {
-            const responses = await Promise.all(
-                styles.map(s => fetch('generate.php?' + params + '&style=' + s))
-            );
+            const res  = await fetch('generate.php?' + params);
+            const text = await res.text();
+            if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
 
-            const parseResponse = async (res) => {
-                const text = await res.text();
-                if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
-                try { return JSON.parse(text); }
-                catch { throw new Error(text || 'Neplatná odpoveď zo servera'); }
-            };
+            let json;
+            try { json = JSON.parse(text); }
+            catch { throw new Error(text || 'Neplatná odpoveď zo servera'); }
 
-            const jsons = await Promise.all(responses.map(parseResponse));
-
-            jsons.forEach((json, i) => {
-                document.getElementById(ids[i]).src   = json.dataUri;
-                document.getElementById(dlIds[i]).href = json.dataUri;
-            });
+            for (const [style, ids] of Object.entries(styleMap)) {
+                document.getElementById(ids.img).src  = json[style];
+                document.getElementById(ids.dl).href   = json[style];
+            }
 
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('previewGrid').classList.add('visible');

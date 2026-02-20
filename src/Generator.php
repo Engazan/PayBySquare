@@ -128,15 +128,50 @@ class Generator
 
     // ─── Getters ─────────────────────────────────────────────────────────────
 
-    public function getIban(): string { return $this->iban; }
-    public function getSwift(): string { return $this->swift; }
-    public function getAmount(): float { return $this->amount; }
-    public function getCurrency(): string { return $this->currency; }
-    public function getRecipient(): string { return $this->recipient; }
-    public function getVariableSymbol(): string { return $this->variableSymbol; }
-    public function getSpecificSymbol(): string { return $this->specificSymbol; }
-    public function getConstantSymbol(): string { return $this->constantSymbol; }
-    public function getNote(): string { return $this->note; }
+    public function getIban(): string
+    {
+        return $this->iban;
+    }
+
+    public function getSwift(): string
+    {
+        return $this->swift;
+    }
+
+    public function getAmount(): float
+    {
+        return $this->amount;
+    }
+
+    public function getCurrency(): string
+    {
+        return $this->currency;
+    }
+
+    public function getRecipient(): string
+    {
+        return $this->recipient;
+    }
+
+    public function getVariableSymbol(): string
+    {
+        return $this->variableSymbol;
+    }
+
+    public function getSpecificSymbol(): string
+    {
+        return $this->specificSymbol;
+    }
+
+    public function getConstantSymbol(): string
+    {
+        return $this->constantSymbol;
+    }
+
+    public function getNote(): string
+    {
+        return $this->note;
+    }
 
     // ─── Generovanie ─────────────────────────────────────────────────────────
 
@@ -168,6 +203,7 @@ class Generator
             $this->swift,
             '0',                        // BEZ SEPA
             '0',                        // BEZ šeku
+            $this->recipient,
         ]);
 
         // Celý dátový reťazec: verzia\tpočet_platieb\tvnútro
@@ -176,14 +212,14 @@ class Generator
         // CRC32b checksum – strrev(hash("crc32b", $data, TRUE))
         $crc = strrev(hash('crc32b', $data, true));
 
-        $payload = $crc . $data;
+        $payload = $crc.$data;
 
         // LZMA1 kompresia
         $compressed = $this->lzmaCompress($payload);
 
         // Header: 2 nulové bajty + 2 bajty dĺžka pôvodného $payload (little-endian)
-        $header = "\x00\x00" . pack('v', strlen($payload));
-        $withHeader = $header . $compressed;
+        $header = "\x00\x00".pack('v', strlen($payload));
+        $withHeader = $header.$compressed;
 
         // Zakódovanie do Base32 (abeceda Pay by square)
         return $this->base32encode($withHeader);
@@ -194,7 +230,7 @@ class Generator
      */
     public function getDataUri(int $size = 300): string
     {
-        return 'data:image/png;base64,' . base64_encode($this->renderPng($size));
+        return 'data:image/png;base64,'.base64_encode($this->renderPng($size));
     }
 
     /**
@@ -238,7 +274,7 @@ class Generator
         $xzPath = $this->resolveXzPath();
 
         // Parametre presne podľa Pay by square špecifikácie
-        $cmd = $xzPath . " '--format=raw' '--lzma1=lc=3,lp=0,pb=2,dict=128KiB' '-c' '-'";
+        $cmd = $xzPath." '--format=raw' '--lzma1=lc=3,lp=0,pb=2,dict=128KiB' '-c' '-'";
 
         $process = proc_open($cmd, [
             0 => ['pipe', 'r'],
@@ -286,7 +322,7 @@ class Generator
         }
 
         throw new PayBySquareException(
-            "xz binárka sa nenašla. Nainštalujte xz-utils (Linux: apt install xz-utils, Mac: brew install xz) " .
+            "xz binárka sa nenašla. Nainštalujte xz-utils (Linux: apt install xz-utils, Mac: brew install xz) ".
             "alebo nastavte cestu manuálne cez setXzPath()."
         );
     }
@@ -314,7 +350,7 @@ class Generator
         $rem = $len % 5;
         if ($rem > 0) {
             $bits .= str_repeat('0', 5 - $rem);
-            $len  += 5 - $rem;
+            $len += 5 - $rem;
         }
 
         // Každých 5 bitov = 1 znak abecedy
