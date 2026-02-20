@@ -25,14 +25,12 @@ $note      = trim($_GET['note'] ?? '');
 $currency  = trim($_GET['currency'] ?? 'EUR');
 $dueDate   = trim($_GET['dueDate'] ?? '');
 $size      = max(100, min(1000, (int) ($_GET['size'] ?? 300)));
-$styleRaw  = trim($_GET['style'] ?? 'default');
-
-$style = match ($styleRaw) {
-    'transparent'              => QrStyle::Transparent,
-    'pay_by_square'            => QrStyle::PayBySquare,
+$styles = [
+    'pay_by_square'             => QrStyle::PayBySquare,
     'pay_by_square_transparent' => QrStyle::PayBySquareTransparent,
-    default                    => QrStyle::Default,
-};
+    'default'                   => QrStyle::Default,
+    'transparent'               => QrStyle::Transparent,
+];
 
 // ── Generovanie ───────────────────────────────────────────────────────────────
 
@@ -46,18 +44,21 @@ try {
         ->setVariableSymbol($vs)
         ->setConstantSymbol($cs)
         ->setSpecificSymbol($ss)
-        ->setNote($note)
-        ->setStyle($style);
+        ->setNote($note);
 
     if ($dueDate !== '') {
         $gen->setDueDate(new \DateTime($dueDate));
     }
 
-    $png = $gen->getDataUri($size);
+    $result = [];
+    foreach ($styles as $key => $style) {
+        $gen->setStyle($style);
+        $result[$key] = $gen->getDataUri($size);
+    }
 
     header('Content-Type: application/json');
     header('Cache-Control: no-store');
-    echo json_encode(['dataUri' => $png]);
+    echo json_encode($result);
 
 } catch (ValidationException $e) {
     http_response_code(422);
