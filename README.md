@@ -5,8 +5,8 @@ OOP PHP knižnica pre generovanie slovenských **PAY by square** QR kódov.
 ## Požiadavky
 
 - PHP 8.0+
-- `xz` nainštalovaný na serveri (`apt install xz-utils` / `yum install xz`)
-- PHP extension `gd` alebo `imagick` (pre renderovanie QR obrázkov)
+- `xz` nainštalovaný na serveri (`apt install xz-utils` / `yum install xz` / `brew install xz`)
+- PHP extension `gd` (pre renderovanie QR obrázkov)
 
 ## Inštalácia
 
@@ -17,9 +17,10 @@ composer require engazan/pay-by-square
 ## Použitie
 
 ```php
-use PayBySquare\PayBySquare;
+use Engazan\PayBySquare\Generator;
+use Engazan\PayBySquare\QrStyle;
 
-$qr = (new PayBySquare())
+$qr = (new Generator())
     ->setIban('SK7700000000000000000000')   // povinné, bez medzier
     ->setSwift('CEKOSKBX')
     ->setAmount(49.99)                       // povinné
@@ -28,7 +29,8 @@ $qr = (new PayBySquare())
     ->setConstantSymbol('0308')              // max 4 znaky
     ->setSpecificSymbol('9999')
     ->setNote('Faktura č. 2024/001')         // max 35 znakov
-    ->setDueDate(new DateTime('+14 days'));
+    ->setDueDate(new DateTime('+14 days'))
+    ->setStyle(QrStyle::PayBySquare);
 ```
 
 ### Výstupné metódy
@@ -52,9 +54,26 @@ echo $qr->getPngBytes(300);
 $string = $qr->generateString();
 ```
 
+## Štýly QR kódov
+
+Vizuálny štýl QR kódu sa nastavuje cez `setStyle()`:
+
+```php
+use Engazan\PayBySquare\QrStyle;
+
+$qr->setStyle(QrStyle::PayBySquare);
+```
+
+| Štýl | Hodnota | Popis |
+|---|---|---|
+| `QrStyle::Default` | `default` | Čistý QR kód, biele pozadie |
+| `QrStyle::Transparent` | `transparent` | QR kód s priehľadným pozadím (PNG s alpha kanálom) |
+| `QrStyle::PayBySquare` | `pay_by_square` | Modrý rám + "PAY by square" footer, biele pozadie |
+| `QrStyle::PayBySquareTransparent` | `pay_by_square_transparent` | Modrý rám + "PAY by square" footer, priehľadné pozadie QR oblasti |
+
 ### Zmena cesty k xz
 
-Ak `xz` nie je na `/usr/bin/xz`:
+Ak `xz` nie je na štandardnej ceste:
 
 ```php
 $qr->setXzPath('/usr/local/bin/xz');
@@ -63,8 +82,8 @@ $qr->setXzPath('/usr/local/bin/xz');
 ### Ošetrenie výnimiek
 
 ```php
-use PayBySquare\Exception\ValidationException;
-use PayBySquare\Exception\PayBySquareException;
+use Engazan\PayBySquare\Exception\ValidationException;
+use Engazan\PayBySquare\Exception\PayBySquareException;
 
 try {
     echo $qr->getImgTag();
@@ -83,7 +102,7 @@ try {
 |---|---|---|
 | `setIban(string)` | IBAN (povinné) | bez medzier |
 | `setSwift(string)` | BIC/SWIFT kód banky | |
-| `setAmount(float)` | Suma v EUR (povinné) | > 0, max 2 des. |
+| `setAmount(float)` | Suma (povinné) | > 0, max 2 des. |
 | `setCurrency(string)` | Mena | default `EUR` |
 | `setRecipient(string)` | Príjemca | |
 | `setVariableSymbol(string)` | VS | max 10 číslic |
@@ -91,7 +110,8 @@ try {
 | `setConstantSymbol(string)` | KS | max 4 znaky |
 | `setNote(string)` | Poznámka | max 35 znakov |
 | `setDueDate(DateTimeInterface)` | Dátum splatnosti | default: dnes |
-| `setXzPath(string)` | Cesta k xz binárke | default: `/usr/bin/xz` |
+| `setStyle(QrStyle)` | Vizuálny štýl QR kódu | default: `QrStyle::Default` |
+| `setXzPath(string)` | Cesta k xz binárke | auto-detekcia |
 
 ## Licencia
 
