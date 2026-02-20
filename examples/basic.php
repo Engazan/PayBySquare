@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use PayBySquare\Generator;
-use PayBySquare\QrStyle;
-use PayBySquare\Exception\ValidationException;
-use PayBySquare\Exception\PayBySquareException;
+use Engazan\PayBySquare\Generator;
+use Engazan\PayBySquare\QrStyle;
+use Engazan\PayBySquare\Exception\ValidationException;
+use Engazan\PayBySquare\Exception\PayBySquareException;
 
 try {
     $base = (new Generator())

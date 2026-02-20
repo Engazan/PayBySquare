@@ -17,12 +17,12 @@
   },
   "autoload": {
     "psr-4": {
-      "PayBySquare\\": "src/"
+      "Engazan\\PayBySquare\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "PayBySquare\\Tests\\": "tests/"
+      "Engazan\\PayBySquare\\Tests\\": "tests/"
     }
   },
   "minimum-stability": "stable"

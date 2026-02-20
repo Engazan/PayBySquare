@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace PayBySquare;
+namespace Engazan\PayBySquare;
 
 use BaconQrCode\Renderer\GDLibRenderer;
 use BaconQrCode\Writer;
-use PayBySquare\Exception\PayBySquareException;
+use Engazan\PayBySquare\Exception\PayBySquareException;
 
 /**
  * Renderuje QR kód v rôznych vizuálnych štýloch pomocou GD.
@@ -133,8 +133,9 @@ class QrRenderer
             imagecopy($img, $qrSrc, $padding, $padding, 0, 0, $qrSize, $qrSize);
         }
 
-        // Footer text + ikona
-        $this->drawFooter($img, (int)($totalW / 2), (int)($footerY + $footerH / 2), max(1, (int)round($qrSize / 60)));
+        // Footer text + ikona – centrovanie medzi koncom QR a koncom obrázka
+        $qrBottom = $padding + $qrSize;
+        $this->drawFooter($img, (int)($totalW / 2), (int)(($qrBottom + $totalH) / 2), max(1, (int)round($qrSize / 60)));
 
         ob_start();
         imagepng($img);
@@ -177,16 +178,18 @@ class QrRenderer
         $iconW   = (int)round($iconH * 1.5);
         $iconGap = (int)round($fontSize * 0.5);
 
-        $totalW = $payW + $byW + $iconGap + $iconW;
-        $startX = $cx - (int)($totalW / 2);
-        $textY  = $cy + (int)($textH / 2) - ($payBox[1]) - 15; // baseline
+        $totalW  = $payW + $byW + $iconGap + $iconW;
+        $startX  = $cx - (int)($totalW / 2);
+        $ascent  = -$payBox[5]; // výška nad baseline (payBox[5] je záporné)
+        $descent = $payBox[1];  // hĺbka pod baseline
+        $textY   = $cy + (int)(($ascent - $descent) / 2); // baseline vertikálne vycentrovaná
 
         imagettftext($img, $fontSize, 0, $startX, $textY, $cBlue, $fontPath, 'PAY');
         imagettftext($img, $fontSize, 0, $startX + $payW, $textY, $cGray, $fontPath, ' by square');
 
         // Ikona karty
         $iconX = $startX + $payW + $byW + $iconGap;
-        $iconY = $cy - (int)($iconH / 2) - 15;
+        $iconY = $cy - (int)($iconH / 2);
         $this->filledRoundedRect($img, $cCard, $iconX, $iconY, $iconX + $iconW, $iconY + $iconH, max(2, (int)round($iconH * 0.2)));
         $stripeY = $iconY + (int)($iconH * 0.35);
         imagefilledrectangle($img, $iconX, $stripeY, $iconX + $iconW, $stripeY + max(1, (int)($iconH * 0.2)), $cWhite);

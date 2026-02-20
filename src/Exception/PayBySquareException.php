@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PayBySquare\Exception;
+namespace Engazan\PayBySquare\Exception;
 
 class PayBySquareException extends \RuntimeException
 {

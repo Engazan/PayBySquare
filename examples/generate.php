@@ -7,10 +7,10 @@ error_reporting(E_ERROR | E_PARSE);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use PayBySquare\Generator;
-use PayBySquare\QrStyle;
-use PayBySquare\Exception\ValidationException;
-use PayBySquare\Exception\PayBySquareException;
+use Engazan\PayBySquare\Generator;
+use Engazan\PayBySquare\QrStyle;
+use Engazan\PayBySquare\Exception\ValidationException;
+use Engazan\PayBySquare\Exception\PayBySquareException;
 
 // ── Vstup ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +23,8 @@ $cs        = trim($_GET['cs'] ?? '');
 $ss        = trim($_GET['ss'] ?? '');
 $note      = trim($_GET['note'] ?? '');
 $currency  = trim($_GET['currency'] ?? 'EUR');
+$dueDate   = trim($_GET['dueDate'] ?? '');
+$size      = max(100, min(1000, (int) ($_GET['size'] ?? 300)));
 $styleRaw  = trim($_GET['style'] ?? 'default');
 
 $style = match ($styleRaw) {
@@ -35,7 +37,7 @@ $style = match ($styleRaw) {
 // ── Generovanie ───────────────────────────────────────────────────────────────
 
 try {
-    $png = (new Generator())
+    $gen = (new Generator())
         ->setIban($iban)
         ->setSwift($swift)
         ->setAmount($amount)
@@ -45,8 +47,13 @@ try {
         ->setConstantSymbol($cs)
         ->setSpecificSymbol($ss)
         ->setNote($note)
-        ->setStyle($style)
-        ->getDataUri(300);
+        ->setStyle($style);
+
+    if ($dueDate !== '') {
+        $gen->setDueDate(new \DateTime($dueDate));
+    }
+
+    $png = $gen->getDataUri($size);
 
     header('Content-Type: application/json');
     header('Cache-Control: no-store');

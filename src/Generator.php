@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace PayBySquare;
+namespace Engazan\PayBySquare;
 
-use PayBySquare\Exception\PayBySquareException;
-use PayBySquare\Exception\ValidationException;
+use Engazan\PayBySquare\Exception\PayBySquareException;
+use Engazan\PayBySquare\Exception\ValidationException;
 
 /**
  * OOP generátor PAY by square QR kódov pre slovenské platby.

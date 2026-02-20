@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PayBySquare;
+namespace Engazan\PayBySquare;
 
 enum QrStyle: string
 {
