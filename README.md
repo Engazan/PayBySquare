@@ -6,7 +6,7 @@ OOP PHP knižnica pre generovanie slovenských **PAY by square** QR kódov.
 
 ## Požiadavky
 
-- PHP 8.0+
+- PHP 8.1+
 - `xz` nainštalovaný na serveri (`apt install xz-utils` / `yum install xz` / `brew install xz`)
 - PHP extension `gd` (pre renderovanie QR obrázkov)
 

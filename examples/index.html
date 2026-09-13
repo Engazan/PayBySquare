@@ -358,7 +358,18 @@
     let activeStyle = 'pay_by_square';
     let requestId = 0;
 
+    function invalidatePreview() {
+        ++requestId;
+        images = {};
+        $('qrMain').hidden = true;
+        $('emptyState').hidden = false;
+        $('download').removeAttribute('href');
+        $('download').setAttribute('aria-disabled', 'true');
+        document.querySelectorAll('.style-opt img').forEach((img) => img.removeAttribute('src'));
+    }
+
     async function generate() {
+        invalidatePreview();
         const id = ++requestId;
         $('stage').classList.add('loading');
 
@@ -419,8 +430,8 @@
     }
 
     function updateCodeExample() {
-        const v = (id) => esc(val(id));
-        const str = (s) => `<span class="str">'${s}'</span>`;
+        const v = (id) => val(id);
+        const str = (s) => `<span class="str">'${esc(s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}'</span>`;
         const call = (fn, arg) => `    -><span class="fn">${fn}</span>(${arg})`;
         const size = v('size') || '300';
         const lines = [
@@ -488,6 +499,7 @@
     let debounceTimer = null;
     document.querySelectorAll('#form input, #form select').forEach((el) => {
         const onChange = () => {
+            invalidatePreview();
             updateSummary();
             if ($('tabCode').classList.contains('active')) updateCodeExample();
             clearTimeout(debounceTimer);
