@@ -38,7 +38,7 @@ class Generator
     private string $constantSymbol = '';
     private string $paymentReference = '';
     private string $note = '';
-    private ?\DateTimeInterface $dueDate = null;
+    private ?string $dueDate = null;
     private string $xzPath = '';
     private QrStyle $style = QrStyle::Default;
 
@@ -106,7 +106,7 @@ class Generator
 
     public function setDueDate(\DateTimeInterface $date): static
     {
-        $this->dueDate = $date;
+        $this->dueDate = $date->format('Ymd');
         return $this;
     }
 
@@ -197,14 +197,12 @@ class Generator
     {
         $this->validate();
 
-        $dueDate = ($this->dueDate ?? new \DateTime())->format('Ymd');
-
         // Vnútorná časť platobného príkazu (podľa Pay by square špecifikácie)
         $inner = implode("\t", [
             '1',                        // počet platieb
             number_format($this->amount, 2, '.', ''),
             $this->currency,
-            $dueDate,
+            $this->dueDate,
             $this->variableSymbol,
             $this->constantSymbol,
             $this->specificSymbol,
