@@ -113,9 +113,23 @@ try {
 | `setConstantSymbol(string)` | KS | max 4 znaky |
 | `setPaymentReference(string)` | Referencia platiteľa | max 35 znakov |
 | `setNote(string)` | Poznámka | max 35 znakov |
-| `setDueDate(DateTimeInterface)` | Dátum splatnosti | default: dnes |
+| `setDueDate(DateTimeInterface)` | Dátum splatnosti | predvolene prázdny |
 | `setStyle(QrStyle)` | Vizuálny štýl QR kódu | default: `QrStyle::Default` |
 | `setXzPath(string)` | Cesta k xz binárke | auto-detekcia |
+
+## Testy
+
+Testy spustíš z koreňa projektu:
+
+```sh
+vendor/bin/phpunit
+```
+
+Vyžadujú nainštalované vývojové závislosti (PHPUnit 10), binárku `xz` na
+štandardnej ceste a PHP rozšírenie GD s podporou PNG a FreeType.
+Overujú dátum splatnosti, validácie a ich hraničné hodnoty, dekódovaný obsah
+platby vrátane dĺžky a CRC32, všetky štyri PNG štýly, data URI a zápis do súboru.
+Kontrola PNG overuje formát a rozmery; neoveruje načítanie QR bankovou aplikáciou.
 
 ## Licencia
 
