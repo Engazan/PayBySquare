@@ -227,7 +227,7 @@
                 <div class="field">
                     <label for="amount">Suma</label>
                     <div class="amount-wrap">
-                        <input type="number" id="amount" step="0.01" min="0.01" value="1" placeholder="0.00">
+                        <input type="number" id="amount" step="0.00000001" min="0.00000001" value="1" placeholder="0.00">
                         <select id="currency" aria-label="Mena">
                             <option value="EUR" selected>EUR</option>
                             <option value="CZK">CZK</option>
@@ -416,7 +416,7 @@
 
     function updateSummary() {
         const amount = parseFloat(val('amount')) || 0;
-        $('sumAmount').innerHTML = esc(amount.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + `<span>${esc(val('currency'))}</span>`;
+        $('sumAmount').innerHTML = esc(amount.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 8 })) + `<span>${esc(val('currency'))}</span>`;
         $('sumIban').textContent = val('iban').replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim() || '—';
         $('sumRecipient').textContent = val('recipient') || '—';
         $('sumSymbols').textContent = [val('vs'), val('cs'), val('ss')].map((s) => s || '–').join(' / ');
@@ -442,7 +442,7 @@
             call('setIban', str(v('iban').replace(/\s/g, ''))),
         ];
         if (v('swift')) lines.push(call('setSwift', str(v('swift'))));
-        lines.push(call('setAmount', `<span class="num">${v('amount') || '0'}</span>`));
+        if (v('amount')) lines.push(call('setAmount', str(v('amount'))));
         if (v('currency') !== 'EUR') lines.push(call('setCurrency', str(v('currency'))));
         if (v('recipient')) lines.push(call('setRecipient', str(v('recipient'))));
         if (v('vs')) lines.push(call('setVariableSymbol', str(v('vs'))));

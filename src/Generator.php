@@ -30,7 +30,7 @@ class Generator
 {
     private string $iban = '';
     private string $swift = '';
-    private ?float $amount = null;
+    private float|string|null $amount = null;
     private string $currency = 'EUR';
     private string $recipient = '';
     private string $recipientAddressLine1 = '';
@@ -40,7 +40,13 @@ class Generator
     private string $constantSymbol = '';
     private string $paymentReference = '';
     private string $note = '';
-    private ?string $dueDate = null;
+    private ?\DateTimeInterface $dueDate = null;
+    private string $invoiceId = '';
+    private array $additionalAccounts = [];
+    private array $additionalPayments = [];
+    private bool $paymentOrderEnabled = true;
+    private ?array $standingOrder = null;
+    private ?array $directDebit = null;
     private string $xzPath = '';
     private QrStyle $style = QrStyle::Default;
 
@@ -58,9 +64,9 @@ class Generator
         return $this;
     }
 
-    public function setAmount(?float $amount): static
+    public function setAmount(float|string|null $amount): static
     {
-        $this->amount = $amount === null ? null : round($amount, 2);
+        $this->amount = $amount;
         return $this;
     }
 
@@ -120,7 +126,61 @@ class Generator
 
     public function setDueDate(\DateTimeInterface $date): static
     {
-        $this->dueDate = $date->format('Ymd');
+        $this->dueDate = clone $date;
+        return $this;
+    }
+
+    public function setInvoiceId(string $invoiceId): static
+    {
+        $this->invoiceId = trim($invoiceId);
+        return $this;
+    }
+
+    public function addBankAccount(string $iban, string $bic = ''): static
+    {
+        $this->additionalAccounts[] = [
+            strtoupper(str_replace(' ', '', $iban)),
+            strtoupper(trim($bic)),
+        ];
+        return $this;
+    }
+
+    public function addPayment(self $payment): static
+    {
+        if ($payment === $this || $payment->additionalPayments !== [] || $payment->invoiceId !== '') {
+            throw new ValidationException('Pridaná platba nesmie obsahovať ďalšie platby ani InvoiceID');
+        }
+        $this->additionalPayments[] = clone $payment;
+        return $this;
+    }
+
+    public function setPaymentOrderEnabled(bool $enabled): static
+    {
+        $this->paymentOrderEnabled = $enabled;
+        return $this;
+    }
+
+    /** $months contains month numbers 1–12. */
+    public function setStandingOrder(string $periodicity, ?int $day = null, array $months = [], ?\DateTimeInterface $lastDate = null): static
+    {
+        $lastDate = $lastDate === null ? null : clone $lastDate;
+        $this->standingOrder = compact('periodicity', 'day', 'months', 'lastDate');
+        return $this;
+    }
+
+    /**
+     * $identification accepts variableSymbol/specificSymbol, reference, or
+     * mandateId/creditorId/contractId (one alternative only).
+     */
+    public function setDirectDebit(
+        string $scheme,
+        string $type,
+        array $identification = [],
+        float|string|null $maxAmount = null,
+        ?\DateTimeInterface $validTillDate = null,
+    ): static {
+        $validTillDate = $validTillDate === null ? null : clone $validTillDate;
+        $this->directDebit = compact('scheme', 'type', 'identification', 'maxAmount', 'validTillDate');
         return $this;
     }
 
@@ -159,7 +219,7 @@ class Generator
         return $this->swift;
     }
 
-    public function getAmount(): ?float
+    public function getAmount(): float|string|null
     {
         return $this->amount;
     }
@@ -219,37 +279,16 @@ class Generator
      */
     public function generateString(): string
     {
-        $this->validate();
-
-        // Vnútorná časť platobného príkazu (podľa Pay by square špecifikácie)
-        $fields = [
-            '1',                        // PaymentOptions: jednorazový platobný príkaz
-            $this->amount === null ? '' : number_format($this->amount, 2, '.', ''),
-            $this->currency,
-            $this->dueDate,
-            $this->variableSymbol,
-            $this->constantSymbol,
-            $this->specificSymbol,
-            $this->paymentReference,    // referencia platiteľa
-            $this->note,
-            '1',                        // počet IBAN-ov
-            $this->iban,
-            $this->swift,
-            '0',                        // bez StandingOrderExt
-            '0',                        // bez DirectDebitExt
-            $this->recipient,
-            $this->recipientAddressLine1,
-            $this->recipientAddressLine2,
-        ];
-
-        // Tabulátor je oddeľovač polí; vo vnútri hodnoty musí byť medzera.
-        $inner = implode("\t", array_map(
-            static fn (?string $value): string => str_replace("\t", ' ', $value ?? ''),
-            $fields,
-        ));
-
-        // Celý dátový reťazec: InvoiceID (prázdne)\tPayments (count)\túdaje platby
-        $data = implode("\t", ['', '1', $inner]);
+        $payments = array_merge([$this], $this->additionalPayments);
+        $fields = [PaymentFormat::text($this->invoiceId, 10, 'InvoiceID'), (string) count($payments)];
+        foreach ($payments as $payment) {
+            array_push($fields, ...$payment->paymentFields());
+        }
+        // Verzia 1.1.0 ukladá údaje príjemcov až za všetkými platbami.
+        foreach ($payments as $payment) {
+            array_push($fields, ...$payment->beneficiaryFields());
+        }
+        $data = implode("\t", $fields);
 
         $characterCount = preg_match_all('/./us', $data);
         if ($characterCount === false) {
@@ -324,7 +363,7 @@ class Generator
         $xzPath = $this->resolveXzPath();
 
         // Parametre presne podľa Pay by square špecifikácie
-        $cmd = $xzPath." '--format=raw' '--lzma1=lc=3,lp=0,pb=2,dict=128KiB' '-c' '-'";
+        $cmd = [$xzPath, '--format=raw', '--lzma1=lc=3,lp=0,pb=2,dict=128KiB', '-c', '-'];
 
         $process = proc_open($cmd, [
             0 => ['pipe', 'r'],
@@ -341,11 +380,12 @@ class Generator
 
         $compressed = stream_get_contents($pipes[1]);
         fclose($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
         fclose($pipes[2]);
-        proc_close($process);
+        $exitCode = proc_close($process);
 
-        if ($compressed === false || $compressed === '') {
-            throw new PayBySquareException('LZMA kompresia zlyhala. Skontrolujte dostupnosť xz.');
+        if ($exitCode !== 0 || $compressed === false || $compressed === '') {
+            throw new PayBySquareException('LZMA kompresia zlyhala: '.trim((string) $error));
         }
 
         return $compressed;
@@ -412,91 +452,131 @@ class Generator
         return $output;
     }
 
-    /**
-     * @throws ValidationException
-     */
-    private function validate(): void
+    /** @return list<string> */
+    private function paymentFields(): array
     {
-        $errors = [];
-
-        if ($this->iban === '') {
-            $errors[] = 'IBAN je povinný (setIban())';
-        } elseif (!$this->isValidIban($this->iban)) {
-            $errors[] = 'IBAN musí mať platný formát a kontrolný súčet';
+        $options = (int) $this->paymentOrderEnabled
+            + ($this->standingOrder !== null ? 2 : 0)
+            + ($this->directDebit !== null ? 4 : 0);
+        if ($options === 0) {
+            throw new ValidationException('Platba musí mať aspoň jednu možnosť platby');
         }
-
-        if ($this->swift !== '' && !preg_match('/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/D', $this->swift)) {
-            $errors[] = 'BIC/SWIFT musí mať 8 alebo 11 platných znakov';
-        }
-
-        if ($this->amount !== null && (!is_finite($this->amount) || $this->amount <= 0)) {
-            $errors[] = 'Suma musí byť väčšia ako 0 (setAmount())';
-        } elseif ($this->amount !== null && strlen(number_format($this->amount, 2, '.', '')) > 15) {
-            $errors[] = 'Suma môže mať maximálne 15 znakov';
-        }
-
-        if (!preg_match('/^[A-Z]{3}$/D', $this->currency)) {
-            $errors[] = 'Mena musí mať 3 písmená A-Z';
-        }
-
-        foreach ([
-            ['Referencia platiteľa', $this->paymentReference, 35],
-            ['Poznámka', $this->note, 140],
-            ['Príjemca', $this->recipient, 70],
-            ['Adresa príjemcu, riadok 1', $this->recipientAddressLine1, 70],
-            ['Adresa príjemcu, riadok 2', $this->recipientAddressLine2, 70],
-        ] as [$label, $value, $maximum]) {
-            $length = preg_match_all('/./us', $value);
-            if ($length === false) {
-                $errors[] = $label.' musí byť platný UTF-8 text';
-            } elseif ($length > $maximum) {
-                $errors[] = $label.' môže mať maximálne '.$maximum.' znakov';
-            }
-        }
-
-        foreach ([
-            ['Variabilný symbol', $this->variableSymbol, 10],
-            ['Konštantný symbol', $this->constantSymbol, 4],
-            ['Špecifický symbol', $this->specificSymbol, 10],
-        ] as [$label, $value, $maximum]) {
-            if ($value !== '' && !ctype_digit($value)) {
-                $errors[] = $label.' môže obsahovať len číslice';
-            }
-            if (strlen($value) > $maximum) {
-                $errors[] = $label.' môže mať maximálne '.$maximum.($label === 'Konštantný symbol' ? ' znaky' : ' číslic');
-            }
-        }
-
         if ($this->paymentReference !== '' && ($this->variableSymbol !== '' || $this->constantSymbol !== '' || $this->specificSymbol !== '')) {
-            $errors[] = 'Referencia platiteľa sa nemôže kombinovať s platobnými symbolmi';
+            throw new ValidationException('Referencia platiteľa sa nemôže kombinovať s platobnými symbolmi');
         }
 
-        if (!empty($errors)) {
-            throw new ValidationException(implode('; ', $errors));
+        $accounts = array_merge([[$this->iban, $this->swift]], $this->additionalAccounts);
+        $fields = [
+            (string) $options,
+            PaymentFormat::decimal($this->amount, 'Suma'),
+            PaymentFormat::currency($this->currency),
+            PaymentFormat::date($this->dueDate, 'Dátum splatnosti'),
+            PaymentFormat::symbol($this->variableSymbol, 10, 'Variabilný symbol'),
+            PaymentFormat::symbol($this->constantSymbol, 4, 'Konštantný symbol'),
+            PaymentFormat::symbol($this->specificSymbol, 10, 'Špecifický symbol'),
+            PaymentFormat::text($this->paymentReference, 35, 'Referencia platiteľa'),
+            PaymentFormat::text($this->note, 140, 'Poznámka'),
+            (string) count($accounts),
+        ];
+        foreach ($accounts as [$iban, $bic]) {
+            $fields[] = PaymentFormat::iban($iban);
+            $fields[] = PaymentFormat::bic($bic);
         }
+
+        $fields[] = $this->standingOrder === null ? '0' : '1';
+        if ($this->standingOrder !== null) {
+            array_push($fields, ...$this->standingOrderFields());
+        }
+        $fields[] = $this->directDebit === null ? '0' : '1';
+        if ($this->directDebit !== null) {
+            array_push($fields, ...$this->directDebitFields());
+        }
+
+        return $fields;
     }
 
-    private function isValidIban(string $iban): bool
+    /** @return list<string> */
+    private function beneficiaryFields(): array
     {
-        $length = strlen($iban);
-        if ($length < 15 || $length > 34 || !preg_match('/^[A-Z]{2}[0-9]{2}[A-Z0-9]+$/D', $iban)) {
-            return false;
+        return [
+            PaymentFormat::text($this->recipient, 70, 'Príjemca'),
+            PaymentFormat::text($this->recipientAddressLine1, 70, 'Adresa príjemcu, riadok 1'),
+            PaymentFormat::text($this->recipientAddressLine2, 70, 'Adresa príjemcu, riadok 2'),
+        ];
+    }
+
+    /** @return list<string> */
+    private function standingOrderFields(): array
+    {
+        $order = $this->standingOrder;
+        $periodicities = [
+            'Daily' => 'd', 'Weekly' => 'w', 'Biweekly' => 'b', 'Monthly' => 'm',
+            'Bimonthly' => 'B', 'Quarterly' => 'q', 'Semiannually' => 's', 'Annually' => 'a',
+        ];
+        if (!isset($periodicities[$order['periodicity']])) {
+            throw new ValidationException('Neplatná periodicita trvalého príkazu');
         }
-        if (str_starts_with($iban, 'SK') && $length !== 24) {
-            return false;
+        $day = $order['day'];
+        $weekly = in_array($order['periodicity'], ['Weekly', 'Biweekly'], true);
+        if ($day !== null && ($day < 1 || $day > ($weekly ? 7 : 31))) {
+            throw new ValidationException('Neplatný deň trvalého príkazu');
+        }
+        $monthMask = 0;
+        foreach ($order['months'] as $month) {
+            if (!is_int($month) || $month < 1 || $month > 12) {
+                throw new ValidationException('Mesiace trvalého príkazu musia byť čísla 1 až 12');
+            }
+            $monthMask |= 1 << ($month - 1);
         }
 
-        $rearranged = substr($iban, 4).substr($iban, 0, 4);
-        $remainder = 0;
-        for ($i = 0, $count = strlen($rearranged); $i < $count; $i++) {
-            $character = $rearranged[$i];
-            if (ctype_digit($character)) {
-                $remainder = ($remainder * 10 + (int) $character) % 97;
-            } else {
-                $remainder = ($remainder * 100 + ord($character) - 55) % 97;
+        return [
+            $day === null ? '' : (string) $day,
+            $monthMask === 0 ? '' : (string) $monthMask,
+            $periodicities[$order['periodicity']],
+            PaymentFormat::date($order['lastDate'], 'Posledný dátum trvalého príkazu'),
+        ];
+    }
+
+    /** @return list<string> */
+    private function directDebitFields(): array
+    {
+        $debit = $this->directDebit;
+        $scheme = ['other' => '0', 'SEPA' => '1'][$debit['scheme']] ?? null;
+        $type = ['one-off' => '0', 'recurrent' => '1'][$debit['type']] ?? null;
+        if ($scheme === null || $type === null) {
+            throw new ValidationException('Neplatná schéma alebo typ inkasa');
+        }
+        $identification = $debit['identification'];
+        $allowed = ['variableSymbol', 'specificSymbol', 'reference', 'mandateId', 'creditorId', 'contractId'];
+        if (array_diff(array_keys($identification), $allowed) !== []) {
+            throw new ValidationException('Neznáme identifikačné pole inkasa');
+        }
+        foreach ($identification as $value) {
+            if (!is_string($value)) {
+                throw new ValidationException('Identifikačné polia inkasa musia byť textové');
             }
         }
+        $vs = PaymentFormat::symbol($identification['variableSymbol'] ?? '', 10, 'Variabilný symbol inkasa');
+        $ss = PaymentFormat::symbol($identification['specificSymbol'] ?? '', 10, 'Špecifický symbol inkasa');
+        $reference = PaymentFormat::text($identification['reference'] ?? '', 35, 'Referencia inkasa');
+        $mandate = PaymentFormat::text($identification['mandateId'] ?? '', 35, 'MandateID');
+        $creditor = PaymentFormat::text($identification['creditorId'] ?? '', 35, 'CreditorID');
+        $contract = PaymentFormat::text($identification['contractId'] ?? '', 35, 'ContractID');
+        $variants = (int) ($vs !== '' || $ss !== '') + (int) ($reference !== '') + (int) ($mandate !== '' || $creditor !== '' || $contract !== '');
+        if ($variants > 1 || ($mandate !== '') !== ($creditor !== '') || ($contract !== '' && $mandate === '')) {
+            throw new ValidationException('Identifikácia inkasa musí použiť práve jednu úplnú alternatívu');
+        }
+        if ($scheme === '1' && ($mandate === '' || $creditor === '')) {
+            throw new ValidationException('SEPA inkaso vyžaduje MandateID a CreditorID');
+        }
+        if ($scheme === '0' && $mandate !== '') {
+            throw new ValidationException('MandateID a CreditorID patria len do SEPA inkasa');
+        }
 
-        return $remainder === 1;
+        return [
+            $scheme, $type, $vs, $ss, $reference, $mandate, $creditor, $contract,
+            PaymentFormat::decimal($debit['maxAmount'], 'Maximálna suma inkasa'),
+            PaymentFormat::date($debit['validTillDate'], 'Platnosť inkasa'),
+        ];
     }
 }

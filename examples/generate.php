@@ -52,7 +52,7 @@ try {
         ->setNote($note);
 
     if ($amount !== null && $amount !== '') {
-        $gen->setAmount((float) $amount);
+        $gen->setAmount((string) $amount);
     }
 
     if ($dueDate !== '') {

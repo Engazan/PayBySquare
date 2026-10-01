@@ -60,7 +60,7 @@ final class GeneratorTest extends TestCase
             ->setRecipientAddressLine2(' 811 01 Bratislava ');
 
         self::assertSame([
-            '', '1', '1', '123.46', 'EUR', '20261205', '0012345678',
+            '', '1', '1', '123.456', 'EUR', '20261205', '0012345678',
             '0308', '000123', '', 'Faktúra za služby',
             '1', 'SK3112000000198742637541', 'TATRSKBX', '0', '0',
             'Ján Novák', 'Hlavná 12', '811 01 Bratislava',
@@ -102,9 +102,15 @@ final class GeneratorTest extends TestCase
 
     public function testMaximumFormattedAmountFitsFifteenCharacters(): void
     {
-        $fields = $this->decode($this->payment()->setAmount(999999999999.99)->generateString());
+        $fields = $this->decode($this->payment()->setAmount('999999999999.99')->generateString());
 
         self::assertSame('999999999999.99', $fields[3]);
+    }
+
+    public function testLegacyFloatAmountsDoNotLoseTrailingIntegerZerosOrGainBinaryNoise(): void
+    {
+        self::assertSame('100', $this->decode($this->payment()->setAmount(100.0)->generateString())[3]);
+        self::assertSame('999999999999.99', $this->decode($this->payment()->setAmount(999999999999.99)->generateString())[3]);
     }
 
     public function testValidForeignIbanIsAccepted(): void
@@ -159,22 +165,22 @@ final class GeneratorTest extends TestCase
             'BIC length' => ['setSwift', 'TATRSKB', 'BIC/SWIFT musí mať 8 alebo 11'],
             'BIC format' => ['setSwift', 'TATR1KBX', 'BIC/SWIFT musí mať 8 alebo 11'],
             'currency format' => ['setCurrency', 'EU1', 'Mena musí mať 3 písmená A-Z'],
-            'zero amount' => ['setAmount', 0.0, 'Suma musí byť väčšia ako 0'],
-            'negative amount' => ['setAmount', -0.01, 'Suma musí byť väčšia ako 0'],
-            'amount rounded to zero' => ['setAmount', 0.004, 'Suma musí byť väčšia ako 0'],
-            'infinite amount' => ['setAmount', INF, 'Suma musí byť väčšia ako 0'],
-            'NaN amount' => ['setAmount', NAN, 'Suma musí byť väčšia ako 0'],
-            'amount length' => ['setAmount', 1000000000000.0, 'Suma môže mať maximálne 15 znakov'],
+            'zero amount' => ['setAmount', 0.0, 'Suma musí byť kladné číslo'],
+            'negative amount' => ['setAmount', -0.01, 'Suma musí byť kladné číslo'],
+            'infinite amount' => ['setAmount', INF, 'Suma musí byť kladné konečné číslo'],
+            'NaN amount' => ['setAmount', NAN, 'Suma musí byť kladné konečné číslo'],
+            'amount length' => ['setAmount', 1000000000000000.0, 'Suma môže mať maximálne 15 znakov'],
             'long reference' => ['setPaymentReference', str_repeat('R', 36), 'Referencia platiteľa môže mať maximálne 35 znakov'],
             'long note' => ['setNote', str_repeat('N', 141), 'Poznámka môže mať maximálne 140 znakov'],
             'long unicode note' => ['setNote', str_repeat('á', 141), 'Poznámka môže mať maximálne 140 znakov'],
             'invalid UTF-8 note' => ['setNote', "\xFF", 'Poznámka musí byť platný UTF-8 text'],
+            'XML control character' => ['setNote', "A\x00B", 'Poznámka obsahuje nepovolený znak XML 1.0'],
             'long recipient' => ['setRecipient', str_repeat('Ž', 71), 'Príjemca môže mať maximálne 70 znakov'],
             'long address 1' => ['setRecipientAddressLine1', str_repeat('á', 71), 'Adresa príjemcu, riadok 1 môže mať maximálne 70 znakov'],
             'long address 2' => ['setRecipientAddressLine2', str_repeat('č', 71), 'Adresa príjemcu, riadok 2 môže mať maximálne 70 znakov'],
             'non-numeric VS' => ['setVariableSymbol', '123A', 'Variabilný symbol môže obsahovať len číslice'],
             'long VS' => ['setVariableSymbol', '12345678901', 'Variabilný symbol môže mať maximálne 10 číslic'],
-            'long KS' => ['setConstantSymbol', '12345', 'Konštantný symbol môže mať maximálne 4 znaky'],
+            'long KS' => ['setConstantSymbol', '12345', 'Konštantný symbol môže mať maximálne 4 číslic'],
             'non-numeric KS' => ['setConstantSymbol', '12A4', 'Konštantný symbol môže obsahovať len číslice'],
             'long SS' => ['setSpecificSymbol', '12345678901', 'Špecifický symbol môže mať maximálne 10 číslic'],
             'non-numeric SS' => ['setSpecificSymbol', '12A4', 'Špecifický symbol môže obsahovať len číslice'],
@@ -203,6 +209,131 @@ final class GeneratorTest extends TestCase
         $this->expectExceptionMessage('Referencia platiteľa sa nemôže kombinovať');
 
         $this->payment()->setVariableSymbol('123')->setPaymentReference('RF123')->generateString();
+    }
+
+    public function testMultiplePaymentsPutBeneficiariesAfterAllPaymentData(): void
+    {
+        $second = (new Generator())
+            ->setIban('DE89370400440532013000')
+            ->setAmount('1.23456789')
+            ->setRecipient('Second')
+            ->setRecipientAddressLine1('Berlin');
+        $first = $this->payment()->setInvoiceId('INV-123')->setRecipient('First')->addPayment($second);
+
+        $fields = $this->decode($first->generateString());
+        self::assertCount(36, $fields);
+        self::assertSame(['INV-123', '2'], array_slice($fields, 0, 2));
+        self::assertSame('1', $fields[2]);
+        self::assertSame('1', $fields[16]);
+        self::assertSame('1.23456789', $fields[17]);
+        self::assertSame('DE89370400440532013000', $fields[26]);
+        self::assertSame(['First', '', '', 'Second', 'Berlin', ''], array_slice($fields, 30));
+    }
+
+    public function testMultipleBankAccountsPreserveFirstAsDefault(): void
+    {
+        $fields = $this->decode($this->payment()
+            ->setSwift('TATRSKBX')
+            ->addBankAccount('DE89370400440532013000', 'COBADEFFXXX')
+            ->generateString());
+
+        self::assertSame(['2', 'SK3112000000198742637541', 'TATRSKBX', 'DE89370400440532013000', 'COBADEFFXXX'], array_slice($fields, 11, 5));
+        self::assertSame('0', $fields[16]);
+        self::assertSame('0', $fields[17]);
+    }
+
+    public function testStandingOrderSerializesClassifierAndOptionalFields(): void
+    {
+        $fields = $this->decode($this->payment()
+            ->setStandingOrder('Annually', 5, [1, 3], new \DateTimeImmutable('2027-12-31'))
+            ->generateString());
+
+        self::assertSame('3', $fields[2]);
+        self::assertSame(['1', '5', '5', 'a', '20271231', '0'], array_slice($fields, 14, 6));
+    }
+
+    public function testSepaDirectDebitSerializesMandateAndDates(): void
+    {
+        $fields = $this->decode($this->payment()
+            ->setDirectDebit(
+                'SEPA', 'recurrent',
+                ['mandateId' => 'MANDATE-1', 'creditorId' => 'CREDITOR-1', 'contractId' => 'CONTRACT-1'],
+                '10.12345678', new \DateTimeImmutable('2028-06-30'),
+            )->generateString());
+
+        self::assertSame('5', $fields[2]);
+        self::assertSame(['0', '1', '1', '1', '', '', '', 'MANDATE-1', 'CREDITOR-1', 'CONTRACT-1', '10.12345678', '20280630'], array_slice($fields, 14, 12));
+    }
+
+    public function testOtherDirectDebitCanUseReferenceWithoutPaymentOrder(): void
+    {
+        $fields = $this->decode($this->payment()
+            ->setPaymentOrderEnabled(false)
+            ->setDirectDebit('other', 'one-off', ['reference' => 'RF123'])
+            ->generateString());
+
+        self::assertSame('4', $fields[2]);
+        self::assertSame(['0', '1', '0', '0', '', '', 'RF123'], array_slice($fields, 14, 7));
+    }
+
+    public function testAllThreePaymentOptionsCanBeCombined(): void
+    {
+        $fields = $this->decode($this->payment()
+            ->setStandingOrder('Annually', 10, [2, 12])
+            ->setDirectDebit('other', 'recurrent', ['variableSymbol' => '123'])
+            ->generateString());
+
+        self::assertSame('7', $fields[2]);
+        self::assertSame(['1', '10', '2050', 'a', '', '1', '0', '1', '123'], array_slice($fields, 14, 9));
+    }
+
+    public function testInvalidExtendedPaymentFieldsAreRejected(): void
+    {
+        $cases = [
+            [$this->payment()->setInvoiceId(str_repeat('X', 11)), 'InvoiceID'],
+            [$this->payment()->setPaymentOrderEnabled(false), 'aspoň jednu možnosť'],
+            [$this->payment()->setStandingOrder('Monthly', 32), 'Neplatný deň'],
+            [$this->payment()->setStandingOrder('Weekly', 8), 'Neplatný deň'],
+            [$this->payment()->setStandingOrder('Annually', null, [13]), 'Mesiace'],
+            [$this->payment()->setDirectDebit('SEPA', 'recurrent'), 'MandateID'],
+            [$this->payment()->setDirectDebit('other', 'recurrent', ['mandateId' => 'M', 'creditorId' => 'C']), 'len do SEPA'],
+            [$this->payment()->setDirectDebit('other', 'one-off', ['reference' => 'RF1', 'variableSymbol' => '12']), 'alternatívu'],
+            [$this->payment()->setDirectDebit('other', 'one-off', ['mandateId' => 'M']), 'alternatívu'],
+            [$this->payment()->setDirectDebit('other', 'one-off', ['reference' => 123]), 'musia byť textové'],
+            [$this->payment()->setCurrency('ABC'), 'ISO 4217'],
+            [$this->payment()->setIban('DE8937040044053201300'), 'dĺžku podľa krajiny'],
+            [$this->payment()->setAmount('1.123456789'), '8 desatinnými'],
+            [$this->payment()->setDueDate((new \DateTimeImmutable('2020-01-01'))->setDate(10000, 1, 1)), '0001 až 9999'],
+        ];
+        foreach ($cases as [$payment, $expected]) {
+            try {
+                $payment->generateString();
+                self::fail('Expected validation error: '.$expected);
+            } catch (ValidationException $exception) {
+                self::assertStringContainsString($expected, $exception->getMessage());
+            }
+        }
+    }
+
+    public function testAdditionalPaymentCannotCarryItsOwnInvoiceId(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('InvoiceID');
+
+        $this->payment()->addPayment($this->payment()->setInvoiceId('OTHER'));
+    }
+
+    public function testBulkPaymentSequenceCannotExceedQrLimit(): void
+    {
+        $long = fn () => $this->payment()
+            ->setNote(str_repeat('N', 140))
+            ->setRecipient(str_repeat('R', 70))
+            ->setRecipientAddressLine1(str_repeat('A', 70))
+            ->setRecipientAddressLine2(str_repeat('B', 70));
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('550 znakov');
+        $long()->addPayment($long())->generateString();
     }
 
     #[DataProvider('styles')]

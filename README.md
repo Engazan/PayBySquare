@@ -25,7 +25,7 @@ use Engazan\PayBySquare\QrStyle;
 $qr = (new Generator())
     ->setIban('SK3112000000198742637541')   // povinné, bez medzier
     ->setSwift('TATRSKBX')
-    ->setAmount(49.99)                       // voliteľné
+    ->setAmount('49.99')                     // voliteľné; string zachová presnú hodnotu
     ->setRecipient('Jozko Mrkvicka')
     ->setRecipientAddressLine1('Hlavná 12')
     ->setRecipientAddressLine2('811 01 Bratislava')
@@ -106,8 +106,8 @@ try {
 |---|---|---|
 | `setIban(string)` | IBAN (povinné) | bez medzier, platný kontrolný súčet |
 | `setSwift(string)` | BIC/SWIFT kód banky | voliteľný, 8 alebo 11 znakov |
-| `setAmount(?float)` | Suma | voliteľná, ak je uvedená musí byť kladná; `null` ju vymaže |
-| `setCurrency(string)` | Mena | 3 písmená, default `EUR` |
+| `setAmount(float\|string\|null)` | Suma | voliteľná, kladná; max 8 desatinných miest a 15 znakov |
+| `setCurrency(string)` | Mena | platný kód ISO 4217, default `EUR` |
 | `setRecipient(string)` | Príjemca | max 70 znakov |
 | `setRecipientAddressLine1(string)` | Adresa príjemcu, riadok 1 | max 70 znakov |
 | `setRecipientAddressLine2(string)` | Adresa príjemcu, riadok 2 | max 70 znakov |
@@ -119,6 +119,48 @@ try {
 | `setDueDate(DateTimeInterface)` | Dátum splatnosti | predvolene prázdny |
 | `setStyle(QrStyle)` | Vizuálny štýl QR kódu | default: `QrStyle::Default` |
 | `setXzPath(string)` | Cesta k xz binárke | auto-detekcia |
+
+Pri sumách, kde záleží na presnosti, používaj desatinný reťazec. `float` môže stratiť presnosť ešte pred odovzdaním knižnici.
+
+### Viac platieb a účtov
+
+```php
+$first = (new Generator())
+    ->setInvoiceId('INV-2026')
+    ->setIban('SK3112000000198742637541')
+    ->addBankAccount('DE89370400440532013000', 'COBADEFFXXX')
+    ->setAmount('49.99')
+    ->setRecipient('Prvý príjemca');
+
+$second = (new Generator())
+    ->setIban('DE89370400440532013000')
+    ->setAmount('1.23456789')
+    ->setRecipient('Druhý príjemca');
+
+$first->addPayment($second);
+$code = $first->generateString();
+```
+
+`InvoiceID` patrí celému kódu, preto sa nastavuje na prvom generátore. Prvý účet každej platby je predvolený. Ak spoločná sekvencia presiahne 550 znakov, treba platby rozdeliť do viacerých QR kódov.
+
+### Trvalý príkaz a inkaso
+
+```php
+$payment = (new Generator())
+    ->setIban('SK3112000000198742637541')
+    ->setStandingOrder('Annually', 15, [1, 3], new DateTimeImmutable('2027-12-31'));
+
+$debit = (new Generator())
+    ->setIban('SK3112000000198742637541')
+    ->setPaymentOrderEnabled(false)
+    ->setDirectDebit(
+        'SEPA', 'recurrent',
+        ['mandateId' => 'MANDATE-1', 'creditorId' => 'CREDITOR-1'],
+        '100.00', new DateTimeImmutable('2028-12-31'),
+    );
+```
+
+`setStandingOrder()` prijíma periodicitu `Daily`, `Weekly`, `Biweekly`, `Monthly`, `Bimonthly`, `Quarterly`, `Semiannually` alebo `Annually`; mesiace sú čísla 1–12. `setDirectDebit()` prijíma schému `other` alebo `SEPA`, typ `one-off` alebo `recurrent` a jednu alternatívu identifikácie: `variableSymbol`/`specificSymbol`, `reference`, alebo `mandateId`/`creditorId`/`contractId`. SEPA vyžaduje mandát a identifikátor veriteľa. Predvolene sa k rozšíreniu ponúka aj jednorazová platba; `setPaymentOrderEnabled(false)` ju vypne.
 
 ## Testy
 
