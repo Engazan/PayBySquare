@@ -11,8 +11,8 @@ use Engazan\PayBySquare\Exception\PayBySquareException;
 
 try {
     $base = (new Generator())
-        ->setIban('SK7700000000000000000000')
-        ->setSwift('CEKOSKBX')
+        ->setIban('SK3112000000198742637541')
+        ->setSwift('TATRSKBX')
         ->setAmount(49.99)
         ->setRecipient('Jozko Mrkvicka')
         ->setVariableSymbol('20240001')

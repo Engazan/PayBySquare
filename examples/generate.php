@@ -16,8 +16,10 @@ use Engazan\PayBySquare\Exception\PayBySquareException;
 
 $iban      = trim($_GET['iban'] ?? '');
 $swift     = trim($_GET['swift'] ?? '');
-$amount    = (float) ($_GET['amount'] ?? 0);
+$amount    = $_GET['amount'] ?? null;
 $recipient = trim($_GET['recipient'] ?? '');
+$recipientAddressLine1 = trim($_GET['recipientAddressLine1'] ?? '');
+$recipientAddressLine2 = trim($_GET['recipientAddressLine2'] ?? '');
 $vs        = trim($_GET['vs'] ?? '');
 $cs        = trim($_GET['cs'] ?? '');
 $ss        = trim($_GET['ss'] ?? '');
@@ -39,14 +41,19 @@ try {
     $gen = (new Generator())
         ->setIban($iban)
         ->setSwift($swift)
-        ->setAmount($amount)
         ->setCurrency($currency)
         ->setRecipient($recipient)
+        ->setRecipientAddressLine1($recipientAddressLine1)
+        ->setRecipientAddressLine2($recipientAddressLine2)
         ->setVariableSymbol($vs)
         ->setConstantSymbol($cs)
         ->setSpecificSymbol($ss)
         ->setPaymentReference($reference)
         ->setNote($note);
+
+    if ($amount !== null && $amount !== '') {
+        $gen->setAmount((float) $amount);
+    }
 
     if ($dueDate !== '') {
         $gen->setDueDate(new \DateTime($dueDate));

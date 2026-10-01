@@ -15,8 +15,8 @@ use Engazan\PayBySquare\Exception\ValidationException;
  *
  * Použitie:
  *   $qr = (new Generator())
- *       ->setIban('SK7700000000000000000000')
- *       ->setSwift('CEKOSKBX')
+ *       ->setIban('SK3112000000198742637541')
+ *       ->setSwift('TATRSKBX')
  *       ->setAmount(49.99)
  *       ->setRecipient('Jozko Mrkvicka')
  *       ->setVariableSymbol('20240001')
@@ -30,9 +30,11 @@ class Generator
 {
     private string $iban = '';
     private string $swift = '';
-    private float $amount = 0.0;
+    private ?float $amount = null;
     private string $currency = 'EUR';
     private string $recipient = '';
+    private string $recipientAddressLine1 = '';
+    private string $recipientAddressLine2 = '';
     private string $variableSymbol = '';
     private string $specificSymbol = '';
     private string $constantSymbol = '';
@@ -56,9 +58,9 @@ class Generator
         return $this;
     }
 
-    public function setAmount(float $amount): static
+    public function setAmount(?float $amount): static
     {
-        $this->amount = round($amount, 2);
+        $this->amount = $amount === null ? null : round($amount, 2);
         return $this;
     }
 
@@ -71,6 +73,18 @@ class Generator
     public function setRecipient(string $recipient): static
     {
         $this->recipient = trim($recipient);
+        return $this;
+    }
+
+    public function setRecipientAddressLine1(string $address): static
+    {
+        $this->recipientAddressLine1 = trim($address);
+        return $this;
+    }
+
+    public function setRecipientAddressLine2(string $address): static
+    {
+        $this->recipientAddressLine2 = trim($address);
         return $this;
     }
 
@@ -145,7 +159,7 @@ class Generator
         return $this->swift;
     }
 
-    public function getAmount(): float
+    public function getAmount(): ?float
     {
         return $this->amount;
     }
@@ -158,6 +172,16 @@ class Generator
     public function getRecipient(): string
     {
         return $this->recipient;
+    }
+
+    public function getRecipientAddressLine1(): string
+    {
+        return $this->recipientAddressLine1;
+    }
+
+    public function getRecipientAddressLine2(): string
+    {
+        return $this->recipientAddressLine2;
     }
 
     public function getVariableSymbol(): string
@@ -198,9 +222,9 @@ class Generator
         $this->validate();
 
         // Vnútorná časť platobného príkazu (podľa Pay by square špecifikácie)
-        $inner = implode("\t", [
-            '1',                        // počet platieb
-            number_format($this->amount, 2, '.', ''),
+        $fields = [
+            '1',                        // PaymentOptions: jednorazový platobný príkaz
+            $this->amount === null ? '' : number_format($this->amount, 2, '.', ''),
             $this->currency,
             $this->dueDate,
             $this->variableSymbol,
@@ -211,13 +235,29 @@ class Generator
             '1',                        // počet IBAN-ov
             $this->iban,
             $this->swift,
-            '0',                        // BEZ SEPA
-            '0',                        // BEZ šeku
+            '0',                        // bez StandingOrderExt
+            '0',                        // bez DirectDebitExt
             $this->recipient,
-        ]);
+            $this->recipientAddressLine1,
+            $this->recipientAddressLine2,
+        ];
 
-        // Celý dátový reťazec: verzia\tpočet_platieb\tvnútro
+        // Tabulátor je oddeľovač polí; vo vnútri hodnoty musí byť medzera.
+        $inner = implode("\t", array_map(
+            static fn (?string $value): string => str_replace("\t", ' ', $value ?? ''),
+            $fields,
+        ));
+
+        // Celý dátový reťazec: InvoiceID (prázdne)\tPayments (count)\túdaje platby
         $data = implode("\t", ['', '1', $inner]);
+
+        $characterCount = preg_match_all('/./us', $data);
+        if ($characterCount === false) {
+            throw new ValidationException('Dátová sekvencia musí byť platný UTF-8 text');
+        }
+        if ($characterCount > 550) {
+            throw new ValidationException('Dátová sekvencia QR môže mať maximálne 550 znakov');
+        }
 
         // CRC32b checksum – strrev(hash("crc32b", $data, TRUE))
         $crc = strrev(hash('crc32b', $data, true));
@@ -379,36 +419,84 @@ class Generator
     {
         $errors = [];
 
-        if (empty($this->iban)) {
+        if ($this->iban === '') {
             $errors[] = 'IBAN je povinný (setIban())';
+        } elseif (!$this->isValidIban($this->iban)) {
+            $errors[] = 'IBAN musí mať platný formát a kontrolný súčet';
         }
 
-        if ($this->amount <= 0) {
+        if ($this->swift !== '' && !preg_match('/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/D', $this->swift)) {
+            $errors[] = 'BIC/SWIFT musí mať 8 alebo 11 platných znakov';
+        }
+
+        if ($this->amount !== null && (!is_finite($this->amount) || $this->amount <= 0)) {
             $errors[] = 'Suma musí byť väčšia ako 0 (setAmount())';
+        } elseif ($this->amount !== null && strlen(number_format($this->amount, 2, '.', '')) > 15) {
+            $errors[] = 'Suma môže mať maximálne 15 znakov';
         }
 
-        if (strlen($this->paymentReference) > 35) {
-            $errors[] = 'Referencia platiteľa môže mať maximálne 35 znakov';
+        if (!preg_match('/^[A-Z]{3}$/D', $this->currency)) {
+            $errors[] = 'Mena musí mať 3 písmená A-Z';
         }
 
-        if (strlen($this->note) > 35) {
-            $errors[] = 'Poznámka môže mať maximálne 35 znakov';
+        foreach ([
+            ['Referencia platiteľa', $this->paymentReference, 35],
+            ['Poznámka', $this->note, 140],
+            ['Príjemca', $this->recipient, 70],
+            ['Adresa príjemcu, riadok 1', $this->recipientAddressLine1, 70],
+            ['Adresa príjemcu, riadok 2', $this->recipientAddressLine2, 70],
+        ] as [$label, $value, $maximum]) {
+            $length = preg_match_all('/./us', $value);
+            if ($length === false) {
+                $errors[] = $label.' musí byť platný UTF-8 text';
+            } elseif ($length > $maximum) {
+                $errors[] = $label.' môže mať maximálne '.$maximum.' znakov';
+            }
         }
 
-        if (!empty($this->variableSymbol) && !ctype_digit($this->variableSymbol)) {
-            $errors[] = 'Variabilný symbol môže obsahovať len číslice';
+        foreach ([
+            ['Variabilný symbol', $this->variableSymbol, 10],
+            ['Konštantný symbol', $this->constantSymbol, 4],
+            ['Špecifický symbol', $this->specificSymbol, 10],
+        ] as [$label, $value, $maximum]) {
+            if ($value !== '' && !ctype_digit($value)) {
+                $errors[] = $label.' môže obsahovať len číslice';
+            }
+            if (strlen($value) > $maximum) {
+                $errors[] = $label.' môže mať maximálne '.$maximum.($label === 'Konštantný symbol' ? ' znaky' : ' číslic');
+            }
         }
 
-        if (strlen($this->variableSymbol) > 10) {
-            $errors[] = 'Variabilný symbol môže mať maximálne 10 číslic';
-        }
-
-        if (!empty($this->constantSymbol) && strlen($this->constantSymbol) > 4) {
-            $errors[] = 'Konštantný symbol môže mať maximálne 4 znaky';
+        if ($this->paymentReference !== '' && ($this->variableSymbol !== '' || $this->constantSymbol !== '' || $this->specificSymbol !== '')) {
+            $errors[] = 'Referencia platiteľa sa nemôže kombinovať s platobnými symbolmi';
         }
 
         if (!empty($errors)) {
             throw new ValidationException(implode('; ', $errors));
         }
+    }
+
+    private function isValidIban(string $iban): bool
+    {
+        $length = strlen($iban);
+        if ($length < 15 || $length > 34 || !preg_match('/^[A-Z]{2}[0-9]{2}[A-Z0-9]+$/D', $iban)) {
+            return false;
+        }
+        if (str_starts_with($iban, 'SK') && $length !== 24) {
+            return false;
+        }
+
+        $rearranged = substr($iban, 4).substr($iban, 0, 4);
+        $remainder = 0;
+        for ($i = 0, $count = strlen($rearranged); $i < $count; $i++) {
+            $character = $rearranged[$i];
+            if (ctype_digit($character)) {
+                $remainder = ($remainder * 10 + (int) $character) % 97;
+            } else {
+                $remainder = ($remainder * 100 + ord($character) - 55) % 97;
+            }
+        }
+
+        return $remainder === 1;
     }
 }

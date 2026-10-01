@@ -23,15 +23,16 @@ use Engazan\PayBySquare\Generator;
 use Engazan\PayBySquare\QrStyle;
 
 $qr = (new Generator())
-    ->setIban('SK7700000000000000000000')   // povinné, bez medzier
-    ->setSwift('CEKOSKBX')
-    ->setAmount(49.99)                       // povinné
+    ->setIban('SK3112000000198742637541')   // povinné, bez medzier
+    ->setSwift('TATRSKBX')
+    ->setAmount(49.99)                       // voliteľné
     ->setRecipient('Jozko Mrkvicka')
+    ->setRecipientAddressLine1('Hlavná 12')
+    ->setRecipientAddressLine2('811 01 Bratislava')
     ->setVariableSymbol('20240001')          // max 10 číslic
     ->setConstantSymbol('0308')              // max 4 znaky
     ->setSpecificSymbol('9999')
-    ->setPaymentReference('/VS1234/SS5678')   // max 35 znakov
-    ->setNote('Faktura č. 2024/001')         // max 35 znakov
+    ->setNote('Faktura č. 2024/001')         // max 140 znakov
     ->setDueDate(new DateTime('+14 days'))
     ->setStyle(QrStyle::PayBySquare);
 ```
@@ -103,16 +104,18 @@ try {
 
 | Setter | Popis | Obmedzenie |
 |---|---|---|
-| `setIban(string)` | IBAN (povinné) | bez medzier |
-| `setSwift(string)` | BIC/SWIFT kód banky | |
-| `setAmount(float)` | Suma (povinné) | > 0, max 2 des. |
-| `setCurrency(string)` | Mena | default `EUR` |
-| `setRecipient(string)` | Príjemca | |
+| `setIban(string)` | IBAN (povinné) | bez medzier, platný kontrolný súčet |
+| `setSwift(string)` | BIC/SWIFT kód banky | voliteľný, 8 alebo 11 znakov |
+| `setAmount(?float)` | Suma | voliteľná, ak je uvedená musí byť kladná; `null` ju vymaže |
+| `setCurrency(string)` | Mena | 3 písmená, default `EUR` |
+| `setRecipient(string)` | Príjemca | max 70 znakov |
+| `setRecipientAddressLine1(string)` | Adresa príjemcu, riadok 1 | max 70 znakov |
+| `setRecipientAddressLine2(string)` | Adresa príjemcu, riadok 2 | max 70 znakov |
 | `setVariableSymbol(string)` | VS | max 10 číslic |
 | `setSpecificSymbol(string)` | ŠS | max 10 číslic |
-| `setConstantSymbol(string)` | KS | max 4 znaky |
-| `setPaymentReference(string)` | Referencia platiteľa | max 35 znakov |
-| `setNote(string)` | Poznámka | max 35 znakov |
+| `setConstantSymbol(string)` | KS | max 4 číslice |
+| `setPaymentReference(string)` | Referencia platiteľa | max 35 znakov; alternatíva k VS/KS/ŠS |
+| `setNote(string)` | Poznámka | max 140 znakov |
 | `setDueDate(DateTimeInterface)` | Dátum splatnosti | predvolene prázdny |
 | `setStyle(QrStyle)` | Vizuálny štýl QR kódu | default: `QrStyle::Default` |
 | `setXzPath(string)` | Cesta k xz binárke | auto-detekcia |

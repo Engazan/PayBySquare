@@ -24,7 +24,7 @@ final class GeneratorTest extends TestCase
         $fields = $this->decode($this->payment()->generateString());
 
         self::assertSame('', $fields[5]);
-        self::assertCount(17, $fields);
+        self::assertCount(19, $fields);
     }
 
     #[DataProvider('dateTypes')]
@@ -54,15 +54,86 @@ final class GeneratorTest extends TestCase
             ->setVariableSymbol('0012345678')
             ->setConstantSymbol('0308')
             ->setSpecificSymbol('000123')
-            ->setPaymentReference(' RF18539007547034 ')
             ->setNote('Faktúra za služby')
-            ->setRecipient(' Ján Novák ');
+            ->setRecipient(' Ján Novák ')
+            ->setRecipientAddressLine1(' Hlavná 12 ')
+            ->setRecipientAddressLine2(' 811 01 Bratislava ');
 
         self::assertSame([
             '', '1', '1', '123.46', 'EUR', '20261205', '0012345678',
-            '0308', '000123', 'RF18539007547034', 'Faktúra za služby',
-            '1', 'SK3112000000198742637541', 'TATRSKBX', '0', '0', 'Ján Novák',
+            '0308', '000123', '', 'Faktúra za služby',
+            '1', 'SK3112000000198742637541', 'TATRSKBX', '0', '0',
+            'Ján Novák', 'Hlavná 12', '811 01 Bratislava',
         ], $this->decode($payment->generateString()));
+    }
+
+    public function testMissingRecipientAddressKeepsBothEmptyPositions(): void
+    {
+        $fields = $this->decode($this->payment()->setRecipient('Ján Novák')->generateString());
+
+        self::assertCount(19, $fields);
+        self::assertSame(['Ján Novák', '', ''], array_slice($fields, 16));
+    }
+
+    public function testTabsInValuesBecomeSpacesWithoutShiftingFields(): void
+    {
+        $payment = $this->payment()
+            ->setPaymentReference("RF\t123")
+            ->setNote("Faktúra\tza služby")
+            ->setRecipient("Ján\tNovák")
+            ->setRecipientAddressLine1("Hlavná\t12")
+            ->setRecipientAddressLine2("Bratislava\tSK");
+
+        $fields = $this->decode($payment->generateString());
+        self::assertCount(19, $fields);
+        self::assertSame('RF 123', $fields[9]);
+        self::assertSame('Faktúra za služby', $fields[10]);
+        self::assertSame(['Ján Novák', 'Hlavná 12', 'Bratislava SK'], array_slice($fields, 16));
+    }
+
+    public function testAmountCanBeOmitted(): void
+    {
+        $payment = (new Generator())->setIban('SK3112000000198742637541');
+
+        self::assertNull($payment->getAmount());
+        self::assertSame('', $this->decode($payment->generateString())[3]);
+        self::assertSame('', $this->decode($this->payment()->setAmount(null)->generateString())[3]);
+    }
+
+    public function testMaximumFormattedAmountFitsFifteenCharacters(): void
+    {
+        $fields = $this->decode($this->payment()->setAmount(999999999999.99)->generateString());
+
+        self::assertSame('999999999999.99', $fields[3]);
+    }
+
+    public function testValidForeignIbanIsAccepted(): void
+    {
+        $fields = $this->decode($this->payment()->setIban('DE89370400440532013000')->generateString());
+
+        self::assertSame('DE89370400440532013000', $fields[12]);
+    }
+
+    public function testReferenceCanBeUsedWithoutPaymentSymbols(): void
+    {
+        $fields = $this->decode($this->payment()->setPaymentReference('RF18539007547034')->generateString());
+
+        self::assertSame(['', '', '', 'RF18539007547034'], array_slice($fields, 6, 4));
+    }
+
+    public function testElevenCharacterBicAndUnicodeBeneficiaryLimitsAreAccepted(): void
+    {
+        $fields = $this->decode($this->payment()
+            ->setSwift('TATRSKBX123')
+            ->setRecipient(str_repeat('Ž', 70))
+            ->setRecipientAddressLine1(str_repeat('á', 70))
+            ->setRecipientAddressLine2(str_repeat('č', 70))
+            ->generateString());
+
+        self::assertSame('TATRSKBX123', $fields[13]);
+        self::assertSame(str_repeat('Ž', 70), $fields[16]);
+        self::assertSame(str_repeat('á', 70), $fields[17]);
+        self::assertSame(str_repeat('č', 70), $fields[18]);
     }
 
     #[DataProvider('invalidPayments')]
@@ -82,14 +153,31 @@ final class GeneratorTest extends TestCase
         return [
             'missing IBAN' => ['setIban', '', 'IBAN je povinný'],
             'blank IBAN' => ['setIban', '   ', 'IBAN je povinný'],
+            'IBAN format' => ['setIban', 'SK31-1200-0000-1987-4263-7541', 'IBAN musí mať platný formát'],
+            'IBAN checksum' => ['setIban', 'SK3212000000198742637541', 'kontrolný súčet'],
+            'IBAN Slovak length' => ['setIban', 'SK311200000019874263754', 'IBAN musí mať platný formát'],
+            'BIC length' => ['setSwift', 'TATRSKB', 'BIC/SWIFT musí mať 8 alebo 11'],
+            'BIC format' => ['setSwift', 'TATR1KBX', 'BIC/SWIFT musí mať 8 alebo 11'],
+            'currency format' => ['setCurrency', 'EU1', 'Mena musí mať 3 písmená A-Z'],
             'zero amount' => ['setAmount', 0.0, 'Suma musí byť väčšia ako 0'],
             'negative amount' => ['setAmount', -0.01, 'Suma musí byť väčšia ako 0'],
             'amount rounded to zero' => ['setAmount', 0.004, 'Suma musí byť väčšia ako 0'],
+            'infinite amount' => ['setAmount', INF, 'Suma musí byť väčšia ako 0'],
+            'NaN amount' => ['setAmount', NAN, 'Suma musí byť väčšia ako 0'],
+            'amount length' => ['setAmount', 1000000000000.0, 'Suma môže mať maximálne 15 znakov'],
             'long reference' => ['setPaymentReference', str_repeat('R', 36), 'Referencia platiteľa môže mať maximálne 35 znakov'],
-            'long note' => ['setNote', str_repeat('N', 36), 'Poznámka môže mať maximálne 35 znakov'],
+            'long note' => ['setNote', str_repeat('N', 141), 'Poznámka môže mať maximálne 140 znakov'],
+            'long unicode note' => ['setNote', str_repeat('á', 141), 'Poznámka môže mať maximálne 140 znakov'],
+            'invalid UTF-8 note' => ['setNote', "\xFF", 'Poznámka musí byť platný UTF-8 text'],
+            'long recipient' => ['setRecipient', str_repeat('Ž', 71), 'Príjemca môže mať maximálne 70 znakov'],
+            'long address 1' => ['setRecipientAddressLine1', str_repeat('á', 71), 'Adresa príjemcu, riadok 1 môže mať maximálne 70 znakov'],
+            'long address 2' => ['setRecipientAddressLine2', str_repeat('č', 71), 'Adresa príjemcu, riadok 2 môže mať maximálne 70 znakov'],
             'non-numeric VS' => ['setVariableSymbol', '123A', 'Variabilný symbol môže obsahovať len číslice'],
             'long VS' => ['setVariableSymbol', '12345678901', 'Variabilný symbol môže mať maximálne 10 číslic'],
             'long KS' => ['setConstantSymbol', '12345', 'Konštantný symbol môže mať maximálne 4 znaky'],
+            'non-numeric KS' => ['setConstantSymbol', '12A4', 'Konštantný symbol môže obsahovať len číslice'],
+            'long SS' => ['setSpecificSymbol', '12345678901', 'Špecifický symbol môže mať maximálne 10 číslic'],
+            'non-numeric SS' => ['setSpecificSymbol', '12A4', 'Špecifický symbol môže obsahovať len číslice'],
         ];
     }
 
@@ -99,15 +187,22 @@ final class GeneratorTest extends TestCase
             ->setAmount(0.01)
             ->setVariableSymbol('1234567890')
             ->setConstantSymbol('1234')
-            ->setPaymentReference(str_repeat('R', 35))
-            ->setNote(str_repeat('N', 35));
+            ->setNote(str_repeat('á', 140));
 
         $fields = $this->decode($payment->generateString());
         self::assertSame('0.01', $fields[3]);
         self::assertSame('1234567890', $fields[6]);
         self::assertSame('1234', $fields[7]);
-        self::assertSame(str_repeat('R', 35), $fields[9]);
-        self::assertSame(str_repeat('N', 35), $fields[10]);
+        self::assertSame('', $fields[9]);
+        self::assertSame(str_repeat('á', 140), $fields[10]);
+    }
+
+    public function testReferenceAndSymbolsCannotBeCombined(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Referencia platiteľa sa nemôže kombinovať');
+
+        $this->payment()->setVariableSymbol('123')->setPaymentReference('RF123')->generateString();
     }
 
     #[DataProvider('styles')]
