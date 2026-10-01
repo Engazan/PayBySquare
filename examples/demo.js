@@ -125,7 +125,7 @@ async function generate() {
     const id = ++requestId;
     $('stage').classList.add('loading');
     try {
-        const response = await fetch('generate.php', {
+        const response = await fetch('payment-preview.php', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData()),
         });
         const body = await response.text();
