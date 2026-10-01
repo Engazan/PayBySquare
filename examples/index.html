@@ -79,6 +79,9 @@
         .grid-3 { grid-template-columns: repeat(3, 1fr); }
         .field label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
         .field label small { font-weight: 400; color: var(--muted); }
+        .field label:has(input, select) { display: block; margin-bottom: 0; }
+        .field label:has(input, select) small { float: right; }
+        .field label input, .field label select { display: block; margin-top: 6px; }
 
         input, select {
             width: 100%; height: 44px; padding: 0 14px; font: 500 14px var(--sans); color: var(--text);
@@ -97,6 +100,22 @@
         .amount-wrap { display: grid; grid-template-columns: 1fr 120px; }
         .amount-wrap input { border-radius: var(--radius-sm) 0 0 var(--radius-sm); font-size: 18px; font-weight: 700; height: 52px; }
         .amount-wrap select { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; height: 52px; font-weight: 600; }
+        .payment-card { border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-top: 16px; background: var(--surface-2); }
+        .payment-head, .account-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+        .payment-head h2 { font-size: 15px; }
+        .account-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-bottom: 8px; }
+        .account-row .field { min-width: 0; }
+        .small-btn { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); border-radius: 9px; padding: 8px 11px; font: 600 12px var(--sans); cursor: pointer; }
+        .small-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .small-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+        .account-row .small-btn { height: 44px; }
+        .subsection { border-top: 1px dashed var(--border); padding-top: 16px; margin-top: 16px; }
+        .subsection h3 { font-size: 13px; margin-bottom: 12px; }
+        .checks { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+        .check { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-2); cursor: pointer; }
+        .check input { width: 16px; height: 16px; accent-color: var(--accent); appearance: auto; }
+        .months { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+        .hint { color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 8px; }
 
         .error-msg { display: none; margin-top: 4px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--danger-soft);
             border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); color: var(--danger);
@@ -170,6 +189,9 @@
         @media (max-width: 560px) {
             .form-card { padding: 4px 18px 18px; }
             .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); }
+            .account-row { grid-template-columns: minmax(0, 1fr) auto; }
+            .account-row .field:first-child { grid-column: 1 / -1; }
+            .months { grid-template-columns: repeat(3, 1fr); }
             header p { display: none; }
             .tab-content { padding: 16px; }
             .qr-stage { padding: 18px; }
@@ -201,91 +223,94 @@
 <main class="layout">
     <section class="card form-card" id="form">
         <div class="group">
-            <div class="group-title"><span class="num">1</span>Príjemca</div>
-            <div class="grid">
-                <div class="field">
-                    <label for="iban">IBAN</label>
-                    <input class="mono" type="text" id="iban" value="SK18 1100 0000 0029 3511 6681" placeholder="SK00 0000 0000 0000 0000 0000"
-                           maxlength="42" autocomplete="off" autocapitalize="characters" spellcheck="false">
-                </div>
-                <div class="grid grid-2">
-                    <div class="field">
-                        <label for="recipient">Meno príjemcu</label>
-                        <input type="text" id="recipient" placeholder="Firma s.r.o.">
-                    </div>
-                    <div class="field">
-                        <label for="swift">SWIFT / BIC</label>
-                        <input class="mono" type="text" id="swift" value="TATRASBX" placeholder="TATRASBX">
-                    </div>
-                </div>
+            <div class="group-title"><span class="num">1</span>Celý QR kód</div>
+            <div class="grid grid-2">
+                <div class="field"><label for="invoiceId">InvoiceID <small>voliteľné, max 10</small></label><input id="invoiceId" maxlength="10" placeholder="INV-2026"></div>
+                <div class="field"><label for="size">Veľkosť QR <small>px</small></label><input type="number" id="size" value="300" min="100" max="1000" step="50"></div>
             </div>
         </div>
-
         <div class="group">
-            <div class="group-title"><span class="num">2</span>Platba</div>
-            <div class="grid">
-                <div class="field">
-                    <label for="amount">Suma</label>
-                    <div class="amount-wrap">
-                        <input type="number" id="amount" step="0.00000001" min="0.00000001" value="1" placeholder="0.00">
-                        <select id="currency" aria-label="Mena">
-                            <option value="EUR" selected>EUR</option>
-                            <option value="CZK">CZK</option>
-                            <option value="USD">USD</option>
-                            <option value="GBP">GBP</option>
-                            <option value="CHF">CHF</option>
-                            <option value="PLN">PLN</option>
-                            <option value="HUF">HUF</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="field">
-                    <label for="dueDate">Dátum splatnosti <small>voliteľné</small></label>
-                    <input type="date" id="dueDate">
-                </div>
-            </div>
+            <div class="group-title"><span class="num">2</span>Platby</div>
+            <div id="payments"></div>
+            <button type="button" class="small-btn" id="addPayment">+ Pridať platbu</button>
         </div>
-
-        <div class="group">
-            <div class="group-title"><span class="num">3</span>Symboly</div>
-            <div class="grid grid-3">
-                <div class="field">
-                    <label for="vs">Variabilný</label>
-                    <input class="mono" type="text" id="vs" placeholder="0000000000" maxlength="10" inputmode="numeric">
-                </div>
-                <div class="field">
-                    <label for="cs">Konštantný</label>
-                    <input class="mono" type="text" id="cs" placeholder="0308" maxlength="4" inputmode="numeric">
-                </div>
-                <div class="field">
-                    <label for="ss">Špecifický</label>
-                    <input class="mono" type="text" id="ss" placeholder="0000000000" maxlength="10" inputmode="numeric">
-                </div>
-            </div>
-        </div>
-
-        <div class="group">
-            <div class="group-title"><span class="num">4</span>Doplnkové údaje</div>
-            <div class="grid">
-                <div class="grid grid-2">
-                    <div class="field">
-                        <label for="reference">Referencia platiteľa <small>max 35</small></label>
-                        <input type="text" id="reference" placeholder="Referencia…" maxlength="35">
-                    </div>
-                    <div class="field">
-                        <label for="size">Veľkosť QR <small>px</small></label>
-                        <input type="number" id="size" value="300" min="100" max="1000" step="50" placeholder="300">
-                    </div>
-                </div>
-                <div class="field">
-                    <label for="note">Poznámka <small>max 35</small></label>
-                    <input type="text" id="note" placeholder="Platba faktúry…" maxlength="35">
-                </div>
-            </div>
-        </div>
-
         <div class="error-msg" id="errorMsg" role="alert"></div>
     </section>
+
+    <template id="paymentTemplate">
+        <section class="payment-card">
+            <div class="payment-head"><h2>Platba</h2><button type="button" class="small-btn danger remove-payment">Odstrániť</button></div>
+            <div class="grid">
+                <div class="field"><label>Meno príjemcu <small>max 70</small><input data-field="recipient" maxlength="70" placeholder="Firma s.r.o."></label></div>
+                <div class="grid grid-2">
+                    <div class="field"><label>Adresa príjemcu, riadok 1 <small>max 70</small><input data-field="address1" maxlength="70"></label></div>
+                    <div class="field"><label>Adresa príjemcu, riadok 2 <small>max 70</small><input data-field="address2" maxlength="70"></label></div>
+                </div>
+                <div class="subsection">
+                    <div class="account-head"><h3>Bankové účty</h3><button type="button" class="small-btn add-account">+ Pridať účet</button></div>
+                    <div class="accounts"></div>
+                    <p class="hint">Prvý účet je predvolený. IBAN je povinný, BIC je voliteľný.</p>
+                </div>
+                <div class="subsection grid">
+                    <h3>Údaje platby</h3>
+                    <div class="grid grid-2">
+                        <div class="field"><label>Suma <small>voliteľné, najviac 8 desatinných miest</small><input data-field="amount" type="text" inputmode="decimal" maxlength="15" value="1" placeholder="49.99"></label></div>
+                        <div class="field"><label>Mena <small>ISO 4217</small><input data-field="currency" class="mono" maxlength="3" value="EUR" list="currencies"></label></div>
+                    </div>
+                    <div class="field"><label>Dátum splatnosti <small>voliteľné</small><input data-field="dueDate" type="date"></label></div>
+                    <div class="grid grid-3">
+                        <div class="field"><label>Variabilný symbol<input data-field="vs" class="mono" maxlength="10" inputmode="numeric"></label></div>
+                        <div class="field"><label>Konštantný symbol<input data-field="cs" class="mono" maxlength="4" inputmode="numeric"></label></div>
+                        <div class="field"><label>Špecifický symbol<input data-field="ss" class="mono" maxlength="10" inputmode="numeric"></label></div>
+                    </div>
+                    <div class="field"><label>Referencia platiteľa <small>alternatíva k symbolom, max 35</small><input data-field="reference" maxlength="35"></label></div>
+                    <div class="field"><label>Poznámka <small>max 140</small><input data-field="note" maxlength="140"></label></div>
+                </div>
+                <div class="subsection">
+                    <h3>Možnosti platby</h3>
+                    <div class="checks">
+                        <label class="check"><input data-field="paymentOrder" type="checkbox" checked> Jednorazová platba</label>
+                        <label class="check"><input data-field="standingEnabled" type="checkbox"> Trvalý príkaz</label>
+                        <label class="check"><input data-field="debitEnabled" type="checkbox"> Inkaso</label>
+                    </div>
+                    <div class="subsection standing-fields grid" hidden>
+                        <h3>Trvalý príkaz</h3>
+                        <div class="grid grid-3">
+                            <div class="field"><label>Periodicita<select data-field="periodicity"><option>Daily</option><option>Weekly</option><option>Biweekly</option><option selected>Monthly</option><option>Bimonthly</option><option>Quarterly</option><option>Semiannually</option><option>Annually</option></select></label></div>
+                            <div class="field"><label>Deň <small>1–31 alebo 1–7</small><input data-field="standingDay" type="number" min="1" max="31"></label></div>
+                            <div class="field"><label>Posledný dátum<input data-field="lastDate" type="date"></label></div>
+                        </div>
+                        <div class="field"><label>Mesiace <small>voliteľné</small></label><div class="months"></div></div>
+                    </div>
+                    <div class="subsection debit-fields grid" hidden>
+                        <h3>Inkaso</h3>
+                        <div class="grid grid-3">
+                            <div class="field"><label>Schéma<select data-field="debitScheme"><option value="other">other</option><option value="SEPA">SEPA</option></select></label></div>
+                            <div class="field"><label>Typ<select data-field="debitType"><option value="one-off">one-off</option><option value="recurrent">recurrent</option></select></label></div>
+                            <div class="field"><label>Identifikácia<select data-field="debitIdentification"><option value="none">Bez identifikácie</option><option value="symbols">VS / ŠS</option><option value="reference">Referencia</option><option value="mandate">Mandát SEPA</option></select></label></div>
+                        </div>
+                        <div class="grid grid-2 debit-identification" data-mode="symbols" hidden>
+                            <div class="field"><label>VS inkasa<input data-field="debitVs" maxlength="10" inputmode="numeric"></label></div>
+                            <div class="field"><label>ŠS inkasa<input data-field="debitSs" maxlength="10" inputmode="numeric"></label></div>
+                        </div>
+                        <div class="field debit-identification" data-mode="reference" hidden><label>Referencia inkasa<input data-field="debitReference" maxlength="35"></label></div>
+                        <div class="grid debit-identification" data-mode="mandate" hidden>
+                            <div class="grid grid-2">
+                                <div class="field"><label>MandateID<input data-field="mandateId" maxlength="35"></label></div>
+                                <div class="field"><label>CreditorID<input data-field="creditorId" maxlength="35"></label></div>
+                            </div>
+                            <div class="field"><label>ContractID <small>voliteľné</small><input data-field="contractId" maxlength="35"></label></div>
+                        </div>
+                        <div class="grid grid-2">
+                            <div class="field"><label>Maximálna suma <small>voliteľné</small><input data-field="maxAmount" inputmode="decimal" maxlength="15" placeholder="100.00"></label></div>
+                            <div class="field"><label>Platnosť do<input data-field="validTillDate" type="date"></label></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </template>
+    <datalist id="currencies"><option value="EUR"><option value="CZK"><option value="USD"><option value="GBP"><option value="CHF"><option value="PLN"><option value="HUF"></datalist>
 
     <aside class="card preview-card">
         <div class="tabs" role="tablist">
@@ -319,6 +344,7 @@
             <div class="summary">
                 <div class="summary-amount" id="sumAmount">1,00<span>EUR</span></div>
                 <dl>
+                    <dt>Počet platieb</dt><dd id="sumPayments">1</dd>
                     <dt>IBAN</dt><dd id="sumIban">—</dd>
                     <dt>Príjemca</dt><dd id="sumRecipient">—</dd>
                     <dt>VS / KS / ŠS</dt><dd id="sumSymbols">—</dd>
@@ -349,169 +375,6 @@
 <footer>engazan/pay-by-square · demo</footer>
 </div>
 
-<script>
-    const $ = (id) => document.getElementById(id);
-    const val = (id) => $(id).value.trim();
-    const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-    let images = {};
-    let activeStyle = 'pay_by_square';
-    let requestId = 0;
-
-    function invalidatePreview() {
-        ++requestId;
-        images = {};
-        $('qrMain').hidden = true;
-        $('emptyState').hidden = false;
-        $('download').removeAttribute('href');
-        $('download').setAttribute('aria-disabled', 'true');
-        document.querySelectorAll('.style-opt img').forEach((img) => img.removeAttribute('src'));
-    }
-
-    async function generate() {
-        invalidatePreview();
-        const id = ++requestId;
-        $('stage').classList.add('loading');
-
-        const params = new URLSearchParams({
-            iban: val('iban').replace(/\s/g, ''), swift: val('swift'), currency: val('currency'),
-            amount: val('amount'), recipient: val('recipient'), vs: val('vs'), cs: val('cs'), ss: val('ss'),
-            reference: val('reference'), note: val('note'), dueDate: val('dueDate'), size: val('size') || '300',
-        });
-
-        try {
-            const res  = await fetch('generate.php?' + params);
-            const text = await res.text();
-            if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
-
-            let json;
-            try { json = JSON.parse(text); } catch { throw new Error(text || 'Neplatná odpoveď zo servera'); }
-            if (id !== requestId) return;
-
-            images = json;
-            document.querySelectorAll('.style-opt').forEach((b) => { b.querySelector('img').src = json[b.dataset.style]; });
-            $('errorMsg').className = 'error-msg';
-            showStyle(activeStyle);
-        } catch (err) {
-            if (id !== requestId) return;
-            $('errorMsg').textContent = '⚠  ' + err.message;
-            $('errorMsg').classList.add('visible');
-        } finally {
-            if (id === requestId) $('stage').classList.remove('loading');
-        }
-    }
-
-    function showStyle(style) {
-        activeStyle = style;
-        document.querySelectorAll('.style-opt').forEach((b) => b.classList.toggle('active', b.dataset.style === style));
-        $('stage').classList.toggle('checker', style.includes('transparent'));
-        if (!images[style]) return;
-        $('emptyState').hidden = true;
-        $('qrMain').hidden = false;
-        $('qrMain').src = images[style];
-        $('download').href = images[style];
-        $('download').download = `qr-${style.replace(/_/g, '-')}.png`;
-        $('download').removeAttribute('aria-disabled');
-    }
-
-    function updateSummary() {
-        const amount = parseFloat(val('amount')) || 0;
-        $('sumAmount').innerHTML = esc(amount.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 8 })) + `<span>${esc(val('currency'))}</span>`;
-        $('sumIban').textContent = val('iban').replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim() || '—';
-        $('sumRecipient').textContent = val('recipient') || '—';
-        $('sumSymbols').textContent = [val('vs'), val('cs'), val('ss')].map((s) => s || '–').join(' / ');
-    }
-
-    function switchTab(tab) {
-        document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
-        $('tabPreview').classList.toggle('active', tab === 'preview');
-        $('tabCode').classList.toggle('active', tab === 'code');
-        if (tab === 'code') updateCodeExample();
-    }
-
-    function updateCodeExample() {
-        const v = (id) => val(id);
-        const str = (s) => `<span class="str">'${esc(s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}'</span>`;
-        const call = (fn, arg) => `    -><span class="fn">${fn}</span>(${arg})`;
-        const size = v('size') || '300';
-        const lines = [
-            `<span class="kw">use</span> Engazan\\PayBySquare\\<span class="fn">Generator</span>;`,
-            `<span class="kw">use</span> Engazan\\PayBySquare\\<span class="fn">QrStyle</span>;`,
-            ``,
-            `<span class="var">$qr</span> = (<span class="kw">new</span> <span class="fn">Generator</span>())`,
-            call('setIban', str(v('iban').replace(/\s/g, ''))),
-        ];
-        if (v('swift')) lines.push(call('setSwift', str(v('swift'))));
-        if (v('amount')) lines.push(call('setAmount', str(v('amount'))));
-        if (v('currency') !== 'EUR') lines.push(call('setCurrency', str(v('currency'))));
-        if (v('recipient')) lines.push(call('setRecipient', str(v('recipient'))));
-        if (v('vs')) lines.push(call('setVariableSymbol', str(v('vs'))));
-        if (v('cs')) lines.push(call('setConstantSymbol', str(v('cs'))));
-        if (v('ss')) lines.push(call('setSpecificSymbol', str(v('ss'))));
-        if (v('reference')) lines.push(call('setPaymentReference', str(v('reference'))));
-        if (v('note')) lines.push(call('setNote', str(v('note'))));
-        if (v('dueDate')) lines.push(call('setDueDate', `<span class="kw">new</span> \\<span class="fn">DateTime</span>(${str(v('dueDate'))})`));
-        lines.push(
-            call('setStyle', `<span class="fn">QrStyle</span>::<span class="var">PayBySquare</span>`) + ';',
-            ``,
-            `<span class="cmt">// Uložiť do súboru</span>`,
-            `<span class="var">$qr</span>-><span class="fn">saveToFile</span>(${str('/tmp/platba.png')}, <span class="num">${size}</span>);`,
-            ``,
-            `<span class="cmt">// Alebo získať data URI</span>`,
-            `<span class="var">$uri</span> = <span class="var">$qr</span>-><span class="fn">getDataUri</span>(<span class="num">${size}</span>);`,
-            ``,
-            `<span class="cmt">// Alebo HTML &lt;img&gt; tag</span>`,
-            `<span class="kw">echo</span> <span class="var">$qr</span>-><span class="fn">getImgTag</span>(<span class="num">${size}</span>);`,
-        );
-        $('codeExample').innerHTML = lines.join('\n');
-    }
-
-    async function copyCode() {
-        try {
-            await navigator.clipboard.writeText($('codeExample').textContent);
-            $('copyBtn').textContent = 'Skopírované ✓';
-        } catch {
-            $('copyBtn').textContent = 'Nepodarilo sa';
-        }
-        setTimeout(() => { $('copyBtn').textContent = 'Kopírovať'; }, 1600);
-    }
-
-    function toggleTheme() {
-        const dark = document.documentElement.dataset.theme !== 'dark';
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-        try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch {}
-    }
-
-    // Maska IBAN: veľké písmená, len A–Z/0–9, skupiny po 4 znakoch, max 34 znakov
-    function maskIban(el) {
-        const caret = el.selectionStart ?? el.value.length;
-        const before = el.value.slice(0, caret).replace(/[^a-z0-9]/gi, '').length;
-        const raw = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 34);
-        el.value = raw.replace(/(.{4})(?=.)/g, '$1 ');
-        const pos = Math.min(before, raw.length);
-        const newCaret = pos + Math.floor((pos - (pos % 4 === 0 && pos > 0 ? 1 : 0)) / 4);
-        if (document.activeElement === el) el.setSelectionRange(newCaret, newCaret);
-    }
-    $('iban').addEventListener('input', () => maskIban($('iban')));
-    maskIban($('iban'));
-
-    // Auto-generovanie pri zmene ľubovoľného poľa (debounce 400ms)
-    let debounceTimer = null;
-    document.querySelectorAll('#form input, #form select').forEach((el) => {
-        const onChange = () => {
-            invalidatePreview();
-            updateSummary();
-            if ($('tabCode').classList.contains('active')) updateCodeExample();
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(generate, 400);
-        };
-        el.addEventListener('input', onChange);
-        el.addEventListener('change', onChange);
-    });
-    document.querySelectorAll('.style-opt').forEach((b) => b.addEventListener('click', () => showStyle(b.dataset.style)));
-
-    updateSummary();
-    generate();
-</script>
+<script src="demo.js"></script>
 </body>
 </html>
