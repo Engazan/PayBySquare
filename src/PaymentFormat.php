@@ -49,7 +49,7 @@ final class PaymentFormat
                 $value = rtrim(rtrim($value, '0'), '.');
             }
         }
-        if (!preg_match('/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?$/D', $value) || !preg_match('/[1-9]/', $value)) {
+        if (!preg_match('/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?$/D', $value) || !preg_match('/[0-9]/', $value)) {
             throw new ValidationException($label.' musí byť kladné číslo s najviac 8 desatinnými miestami');
         }
         if (strlen($value) > 15) {
