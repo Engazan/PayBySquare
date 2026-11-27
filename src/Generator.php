@@ -6,7 +6,7 @@ namespace Engazan\PayBySquare;
 
 use Engazan\PayBySquare\Exception\PayBySquareException;
 use Engazan\PayBySquare\Exception\ValidationException;
-
+use Engazan\PayBySquare\Lzma\Lzma1Encoder;
 /**
  * OOP generátor PAY by square QR kódov pre slovenské platby.
  *
@@ -358,65 +358,13 @@ class Generator
         return (new QrRenderer($qrString, $size, $this->style))->render();
     }
 
+
     private function lzmaCompress(string $data): string
     {
-        $xzPath = $this->resolveXzPath();
-
-        // Parametre presne podľa Pay by square špecifikácie
-        $cmd = [$xzPath, '--format=raw', '--lzma1=lc=3,lp=0,pb=2,dict=128KiB', '-c', '-'];
-
-        $process = proc_open($cmd, [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes);
-
-        if ($process === false) {
-            throw new PayBySquareException('Nepodarilo sa spustiť xz proces.');
-        }
-
-        fwrite($pipes[0], $data);
-        fclose($pipes[0]);
-
-        $compressed = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        $error = stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
-        $exitCode = proc_close($process);
-
-        if ($exitCode !== 0 || $compressed === false || $compressed === '') {
-            throw new PayBySquareException('LZMA kompresia zlyhala: '.trim((string) $error));
-        }
-
+        $compressed = Lzma1Encoder::compress($data);
         return $compressed;
     }
-
-    private function resolveXzPath(): string
-    {
-        // Manuálne nastavená cesta má prednosť
-        if ($this->xzPath !== '' && is_executable($this->xzPath)) {
-            return $this->xzPath;
-        }
-
-        $candidates = [
-            '/usr/bin/xz',
-            '/usr/local/bin/xz',
-            '/opt/homebrew/bin/xz',   // macOS Apple Silicon
-            '/opt/homebrew/opt/xz/bin/xz',
-        ];
-
-        foreach ($candidates as $path) {
-            if (is_executable($path)) {
-                return $path;
-            }
-        }
-
-        throw new PayBySquareException(
-            "xz binárka sa nenašla. Nainštalujte xz-utils (Linux: apt install xz-utils, Mac: brew install xz) ".
-            "alebo nastavte cestu manuálne cez setXzPath()."
-        );
-    }
-
+   
     /**
      * Base32 enkódovanie podľa Pay by square špecifikácie (vlastná abeceda).
      */
